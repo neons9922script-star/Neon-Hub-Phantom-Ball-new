@@ -1155,7 +1155,7 @@ local function startAutoParry()
                 return
             end
 
-            -- Raio Anime Ball: CONFIG.PARRY_DIST + math.floor(trackedSpeed / 6.5)
+            -- Raio Anime Ball: CONFIG.PARRY_DIST + math.floor(velocity / 3.90)
             local velocity = State.animeTrackedSpeed
             local radius = math.clamp(
                 CONFIG.PARRY_DIST + math.floor(velocity / 3.90),
@@ -1802,6 +1802,103 @@ end)
 
 createSeparator(CombatPage)
 
+-- ── Slider Parry Distance (Combat) ────────
+do
+    local pdContainer = Instance.new("Frame", CombatPage)
+    pdContainer.Size             = UDim2.new(1, 0, 0, 72)
+    pdContainer.BackgroundColor3 = CONFIG.BG_PANEL
+    pdContainer.BorderSizePixel  = 0
+    pdContainer.ZIndex           = 3
+    pdContainer.ClipsDescendants = false
+    Instance.new("UICorner", pdContainer).CornerRadius = UDim.new(0, 10)
+    local pdStroke = Instance.new("UIStroke", pdContainer)
+    pdStroke.Color = CONFIG.BORDER_COLOR; pdStroke.Thickness = 1
+
+    local pdTitle = Instance.new("TextLabel", pdContainer)
+    pdTitle.Text = "Parry Distance"
+    pdTitle.Size = UDim2.new(0.55, 0, 0, 18)
+    pdTitle.Position = UDim2.new(0, 14, 0, 6)
+    pdTitle.BackgroundTransparency = 1
+    pdTitle.TextColor3 = CONFIG.TEXT_PRIMARY
+    pdTitle.TextSize = 12; pdTitle.Font = Enum.Font.GothamSemibold
+    pdTitle.TextXAlignment = Enum.TextXAlignment.Left
+    pdTitle.ZIndex = 4
+
+    local pdValueLabel = Instance.new("TextLabel", pdContainer)
+    pdValueLabel.Text = "1 st"
+    pdValueLabel.Size = UDim2.new(0.42, 0, 0, 18)
+    pdValueLabel.Position = UDim2.new(0.58, -14, 0, 6)
+    pdValueLabel.BackgroundTransparency = 1
+    pdValueLabel.TextColor3 = CONFIG.ACCENT_COLOR
+    pdValueLabel.TextSize = 12; pdValueLabel.Font = Enum.Font.GothamBold
+    pdValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    pdValueLabel.ZIndex = 4
+
+    local pdDesc = Instance.new("TextLabel", pdContainer)
+    pdDesc.Text = "Raio base do detector de parry"
+    pdDesc.Size = UDim2.new(1, -28, 0, 14)
+    pdDesc.Position = UDim2.new(0, 14, 0, 26)
+    pdDesc.BackgroundTransparency = 1
+    pdDesc.TextColor3 = CONFIG.TEXT_SECONDARY
+    pdDesc.TextSize = 10; pdDesc.Font = Enum.Font.Gotham
+    pdDesc.TextXAlignment = Enum.TextXAlignment.Left
+    pdDesc.ZIndex = 4
+
+    local pdTrack = Instance.new("Frame", pdContainer)
+    pdTrack.Size = UDim2.new(1, -28, 0, 6)
+    pdTrack.Position = UDim2.new(0, 14, 0, 50)
+    pdTrack.BackgroundColor3 = CONFIG.TOGGLE_OFF
+    pdTrack.BorderSizePixel = 0; pdTrack.ZIndex = 4
+    Instance.new("UICorner", pdTrack).CornerRadius = UDim.new(1, 0)
+
+    local pdFill = Instance.new("Frame", pdTrack)
+    pdFill.Size = UDim2.new(0, 0, 1, 0)
+    pdFill.BackgroundColor3 = CONFIG.ACCENT_COLOR
+    pdFill.BorderSizePixel = 0; pdFill.ZIndex = 5
+    Instance.new("UICorner", pdFill).CornerRadius = UDim.new(1, 0)
+
+    local pdKnob = Instance.new("Frame", pdTrack)
+    pdKnob.Size = UDim2.new(0, 14, 0, 14)
+    pdKnob.Position = UDim2.new(0, -7, 0.5, -7)
+    pdKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    pdKnob.BorderSizePixel = 0; pdKnob.ZIndex = 6
+    Instance.new("UICorner", pdKnob).CornerRadius = UDim.new(1, 0)
+
+    local PD_MIN, PD_MAX = 1, 50
+    local pdDragging = false
+
+    local function updatePdSlider(xRatio)
+        xRatio = math.clamp(xRatio, 0, 1)
+        local value = math.round(PD_MIN + xRatio * (PD_MAX - PD_MIN))
+        CONFIG.PARRY_DIST = value
+        pdValueLabel.Text = value .. " st"
+        pdFill.Size = UDim2.new(xRatio, 0, 1, 0)
+        pdKnob.Position = UDim2.new(xRatio, -7, 0.5, -7)
+    end
+
+    pdTrack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or
+           input.UserInputType == Enum.UserInputType.Touch then
+            pdDragging = true
+            updatePdSlider((input.Position.X - pdTrack.AbsolutePosition.X) / pdTrack.AbsoluteSize.X)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if pdDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or
+                           input.UserInputType == Enum.UserInputType.Touch) then
+            updatePdSlider((input.Position.X - pdTrack.AbsolutePosition.X) / pdTrack.AbsoluteSize.X)
+        end
+    end)
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or
+           input.UserInputType == Enum.UserInputType.Touch then
+            pdDragging = false
+        end
+    end)
+end
+
+createSeparator(CombatPage)
+
 createToggle(CombatPage, "Optimizer", "Limpa remote events antigos após cada disparo", function(on)
     State.optimizer = on
 end)
@@ -1964,102 +2061,6 @@ if DETECTED_GAME == "phantom" then
             TweenService:Create(passiveBoxStroke, TweenInfo.new(0.3), {Color = CONFIG.BORDER_COLOR}):Play()
         end)
     end)
-
-    createSeparator(SkillsPage)
-
-    -- ── Slider Parry Distance ──────────────────
-    local pdContainer = Instance.new("Frame", SkillsPage)
-    pdContainer.Size             = UDim2.new(1, 0, 0, 72)
-    pdContainer.BackgroundColor3 = CONFIG.BG_PANEL
-    pdContainer.BorderSizePixel  = 0
-    pdContainer.ZIndex           = 3
-    pdContainer.ClipsDescendants = false
-    Instance.new("UICorner", pdContainer).CornerRadius = UDim.new(0, 10)
-    local pdStroke = Instance.new("UIStroke", pdContainer)
-    pdStroke.Color = CONFIG.BORDER_COLOR; pdStroke.Thickness = 1
-
-    local pdTitle = Instance.new("TextLabel", pdContainer)
-    pdTitle.Text = "Parry Distance"
-    pdTitle.Size = UDim2.new(0.55, 0, 0, 18)
-    pdTitle.Position = UDim2.new(0, 14, 0, 6)
-    pdTitle.BackgroundTransparency = 1
-    pdTitle.TextColor3 = CONFIG.TEXT_PRIMARY
-    pdTitle.TextSize = 12; pdTitle.Font = Enum.Font.GothamSemibold
-    pdTitle.TextXAlignment = Enum.TextXAlignment.Left
-    pdTitle.ZIndex = 4
-
-    local pdValueLabel = Instance.new("TextLabel", pdContainer)
-    pdValueLabel.Text = "1 st"
-    pdValueLabel.Size = UDim2.new(0.42, 0, 0, 18)
-    pdValueLabel.Position = UDim2.new(0.58, -14, 0, 6)
-    pdValueLabel.BackgroundTransparency = 1
-    pdValueLabel.TextColor3 = CONFIG.ACCENT_COLOR
-    pdValueLabel.TextSize = 12; pdValueLabel.Font = Enum.Font.GothamBold
-    pdValueLabel.TextXAlignment = Enum.TextXAlignment.Right
-    pdValueLabel.ZIndex = 4
-
-    local pdDesc = Instance.new("TextLabel", pdContainer)
-    pdDesc.Text = "Raio base do detector de parry"
-    pdDesc.Size = UDim2.new(1, -28, 0, 14)
-    pdDesc.Position = UDim2.new(0, 14, 0, 26)
-    pdDesc.BackgroundTransparency = 1
-    pdDesc.TextColor3 = CONFIG.TEXT_SECONDARY
-    pdDesc.TextSize = 10; pdDesc.Font = Enum.Font.Gotham
-    pdDesc.TextXAlignment = Enum.TextXAlignment.Left
-    pdDesc.ZIndex = 4
-
-    local pdTrack = Instance.new("Frame", pdContainer)
-    pdTrack.Size = UDim2.new(1, -28, 0, 6)
-    pdTrack.Position = UDim2.new(0, 14, 0, 50)
-    pdTrack.BackgroundColor3 = CONFIG.TOGGLE_OFF
-    pdTrack.BorderSizePixel = 0; pdTrack.ZIndex = 4
-    Instance.new("UICorner", pdTrack).CornerRadius = UDim.new(1, 0)
-
-    local pdFill = Instance.new("Frame", pdTrack)
-    pdFill.Size = UDim2.new(0, 0, 1, 0)
-    pdFill.BackgroundColor3 = CONFIG.ACCENT_COLOR
-    pdFill.BorderSizePixel = 0; pdFill.ZIndex = 5
-    Instance.new("UICorner", pdFill).CornerRadius = UDim.new(1, 0)
-
-    local pdKnob = Instance.new("Frame", pdTrack)
-    pdKnob.Size = UDim2.new(0, 14, 0, 14)
-    pdKnob.Position = UDim2.new(0, -7, 0.5, -7)
-    pdKnob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    pdKnob.BorderSizePixel = 0; pdKnob.ZIndex = 6
-    Instance.new("UICorner", pdKnob).CornerRadius = UDim.new(1, 0)
-
-    -- Range: 1 a 50 studs
-    local PD_MIN, PD_MAX = 1, 50
-    local pdDragging = false
-
-    local function updatePdSlider(xRatio)
-        xRatio = math.clamp(xRatio, 0, 1)
-        local value = math.round(PD_MIN + xRatio * (PD_MAX - PD_MIN))
-        CONFIG.PARRY_DIST = value
-        pdValueLabel.Text = value .. " st"
-        pdFill.Size = UDim2.new(xRatio, 0, 1, 0)
-        pdKnob.Position = UDim2.new(xRatio, -7, 0.5, -7)
-    end
-
-    pdTrack.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or
-           input.UserInputType == Enum.UserInputType.Touch then
-            pdDragging = true
-            updatePdSlider((input.Position.X - pdTrack.AbsolutePosition.X) / pdTrack.AbsoluteSize.X)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if pdDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or
-                           input.UserInputType == Enum.UserInputType.Touch) then
-            updatePdSlider((input.Position.X - pdTrack.AbsolutePosition.X) / pdTrack.AbsoluteSize.X)
-        end
-    end)
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or
-           input.UserInputType == Enum.UserInputType.Touch then
-            pdDragging = false
-        end
-    end)
 end
 
 createToggle(VisualPage, "Show Detectors", "Exibe as esferas dos detectores no mundo", function(on)
@@ -2214,7 +2215,7 @@ RunService.RenderStepped:Connect(function()
         if State.autoParry then
             local curRadius
             if DETECTED_GAME == "anime" then
-                curRadius = math.clamp(CONFIG.PARRY_DIST + math.floor(State.animeTrackedSpeed / 6.5), CONFIG.PARRY_DIST, 300)
+                curRadius = math.clamp(CONFIG.PARRY_DIST + math.floor(State.animeTrackedSpeed / 3.90), CONFIG.PARRY_DIST, 300)
             else
                 curRadius = math.clamp(CONFIG.PARRY_DIST + math.floor(trackedSpeed / 5), CONFIG.PARRY_DIST, 300)
             end
