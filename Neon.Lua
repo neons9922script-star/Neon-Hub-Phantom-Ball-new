@@ -602,7 +602,7 @@ end
 local function createTab(name, icon)
     local tab = Instance.new("TextButton", TabBar)
     tab.Text                  = (icon and (icon .. "  ") or "") .. name
-    tab.Size                  = UDim2.new(0, 100, 0, 30)
+    tab.Size                  = UDim2.new(0, 80, 0, 30)
     tab.BackgroundColor3      = CONFIG.BG_DARK
     tab.BackgroundTransparency = 1
     tab.TextColor3            = CONFIG.TEXT_SECONDARY
@@ -1873,7 +1873,7 @@ if DETECTED_GAME == "phantom" then
 
     -- Container do passivo
     local passiveContainer = Instance.new("Frame", SkillsPage)
-    passiveContainer.Size             = UDim2.new(1, 0, 0, 80)
+    passiveContainer.Size             = UDim2.new(1, 0, 0, 90)
     passiveContainer.BackgroundColor3 = CONFIG.BG_PANEL
     passiveContainer.BorderSizePixel  = 0
     passiveContainer.ZIndex           = 3
@@ -1973,6 +1973,7 @@ if DETECTED_GAME == "phantom" then
     pdContainer.BackgroundColor3 = CONFIG.BG_PANEL
     pdContainer.BorderSizePixel  = 0
     pdContainer.ZIndex           = 3
+    pdContainer.ClipsDescendants = false
     Instance.new("UICorner", pdContainer).CornerRadius = UDim.new(0, 10)
     local pdStroke = Instance.new("UIStroke", pdContainer)
     pdStroke.Color = CONFIG.BORDER_COLOR; pdStroke.Thickness = 1
