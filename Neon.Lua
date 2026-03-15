@@ -1158,7 +1158,7 @@ local function startAutoParry()
             -- Raio Anime Ball: CONFIG.PARRY_DIST + math.floor(trackedSpeed / 6.5)
             local velocity = State.animeTrackedSpeed
             local radius = math.clamp(
-                CONFIG.PARRY_DIST + math.floor(velocity / 4),
+                CONFIG.PARRY_DIST + math.floor(velocity / 3.90),
                 CONFIG.PARRY_DIST,
                 300
             )
