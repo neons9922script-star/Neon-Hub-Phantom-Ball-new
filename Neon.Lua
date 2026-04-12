@@ -34,11 +34,11 @@ local CONFIG = {
 --         DETECÇÃO DE JOGO
 -- ══════════════════════════════════════════
 local GAME_NAMES = {
-    phantom = {"phantom ball", "bola fantasma"},
-    anime   = {"anime ball", "bola de anime"},
+    phantom = {"Phantom ball", "Bola fantasma"},
+    anime   = {"Anime ball", "Bola de anime"},
 }
 
-local DETECTED_GAME = nil  -- "phantom" | "anime" | nil
+local DETECTED_GAME = nil  -- "Phantom" | "Anime" | nil
 
 local function detectGame()
     local ok, info = pcall(function()
