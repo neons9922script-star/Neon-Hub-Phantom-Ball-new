@@ -11,52 +11,76 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 
 -- ══════════════════════════════════════════
---              CONFIGURAÇÕES
+--              SETTINGS
 -- ══════════════════════════════════════════
 local CONFIG = {
     GUI_NAME        = "NexusHub",
-    ACCENT_COLOR    = Color3.fromRGB(99, 102, 241),
-    ACCENT_GLOW     = Color3.fromRGB(139, 92, 246),
-    BG_DARK         = Color3.fromRGB(10, 10, 18),
-    BG_MID          = Color3.fromRGB(16, 16, 28),
-    BG_PANEL        = Color3.fromRGB(20, 20, 36),
-    BORDER_COLOR    = Color3.fromRGB(40, 40, 70),
+    -- Default theme: Black & White
+    ACCENT_COLOR    = Color3.fromRGB(220, 220, 220),
+    ACCENT_GLOW     = Color3.fromRGB(255, 255, 255),
+    BG_DARK         = Color3.fromRGB(8,   8,   8),
+    BG_MID          = Color3.fromRGB(18,  18,  18),
+    BG_PANEL        = Color3.fromRGB(26,  26,  26),
+    BORDER_COLOR    = Color3.fromRGB(55,  55,  55),
     TEXT_PRIMARY    = Color3.fromRGB(240, 240, 255),
     TEXT_SECONDARY  = Color3.fromRGB(140, 140, 180),
-    TOGGLE_ON       = Color3.fromRGB(99, 102, 241),
+    TOGGLE_ON       = Color3.fromRGB(200, 200, 200),
     TOGGLE_OFF      = Color3.fromRGB(45, 45, 70),
     SUCCESS         = Color3.fromRGB(34, 197, 94),
     DANGER          = Color3.fromRGB(239, 68, 68),
-    PARRY_DIST      = 1,   -- raio base do detector (studs)
+    PARRY_DIST      = 1,   -- base detector radius (studs)
 }
 
 -- ══════════════════════════════════════════
---         DETECÇÃO DE JOGO
+--         GAME DETECTION
 -- ══════════════════════════════════════════
 local GAME_NAMES = {
-    phantom = {"Phantom ball", "Bola fantasma"},
-    anime   = {"Anime ball", "Bola de anime"},
+    phantom = {"Phantom ball", "Bola fantasma", "Phantom Ball", "Bola Fantasma"},
+    anime   = {"Anime ball", "Bola de anime", "Anime Ball", "Bola De Anime"},
+}
+
+-- PlaceId detection (fastest method — no API call needed)
+-- IDs stored as strings to avoid Lua float precision issues with large integers
+local GAME_IDS = {
+    phantom = {"4538598064"},
+    anime   = {"5120885191"},
 }
 
 local DETECTED_GAME = nil  -- "Phantom" | "Anime" | nil
 
 local function detectGame()
+    local placeId = game.PlaceId
+    print("[NexusHub] PlaceId =", placeId)
+
+    -- 1) Check by PlaceId first (instant, no API call)
+    for _, id in ipairs(GAME_IDS.phantom) do
+        if placeId == tonumber(id) then return "phantom" end
+    end
+    for _, id in ipairs(GAME_IDS.anime) do
+        if placeId == tonumber(id) then return "anime" end
+    end
+
+    -- 2) Fallback: check by game name via MarketplaceService
     local ok, info = pcall(function()
-        return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId)
+        return game:GetService("MarketplaceService"):GetProductInfo(placeId)
     end)
-    if not ok or not info then return nil end
+    if not ok or not info then
+        print("[NexusHub] MarketplaceService failed")
+        return nil
+    end
+    print("[NexusHub] Game name =", info.Name)
     local lower = info.Name:lower()
     for _, n in ipairs(GAME_NAMES.phantom) do
-        if lower:find(n, 1, true) then return "phantom" end
+        if lower:find(n:lower(), 1, true) then return "phantom" end
     end
     for _, n in ipairs(GAME_NAMES.anime) do
-        if lower:find(n, 1, true) then return "anime" end
+        if lower:find(n:lower(), 1, true) then return "anime" end
     end
     return nil
 end
 
 -- ══════════════════════════════════════════
---              ESTADO GLOBAL
+--              GLOBAL STATE
 -- ══════════════════════════════════════════
 local State = {
     autoParry                = false,
@@ -85,12 +109,12 @@ local State = {
     optimizer                = false,
     -- Anime Ball: speed detector separado
     speedDetectorConn        = nil,
-    animeTrackedSpeed        = 0,   -- velocidade atual detectada pelo speed detector
-    lastSpeedCFrame          = nil, -- CFrame anterior para cálculo de velocidade
+    animeTrackedSpeed        = 0,   -- current speed detected by speed detector
+    lastSpeedCFrame          = nil, -- previous CFrame for speed calculation
 }
 
 -- ══════════════════════════════════════════
---         REMOÇÃO DE GUI ANTIGA
+--         OLD GUI REMOVAL
 -- ══════════════════════════════════════════
 local oldGui = LocalPlayer:WaitForChild("PlayerGui"):FindFirstChild(CONFIG.GUI_NAME)
 if oldGui then oldGui:Destroy() end
@@ -111,7 +135,7 @@ loadFrame.BackgroundColor3   = CONFIG.BG_DARK
 loadFrame.BorderSizePixel    = 0
 loadFrame.ZIndex             = 100
 
--- Gradiente de fundo
+-- Background gradient
 local loadGrad = Instance.new("UIGradient", loadFrame)
 loadGrad.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0,   Color3.fromRGB(8,  8,  20)),
@@ -119,7 +143,7 @@ loadGrad.Color = ColorSequence.new({
 })
 loadGrad.Rotation = 135
 
--- Glow central
+-- Center glow
 local loadGlow = Instance.new("Frame", loadFrame)
 loadGlow.Size               = UDim2.new(0, 340, 0, 340)
 loadGlow.Position           = UDim2.new(0.5, -170, 0.5, -170)
@@ -129,7 +153,7 @@ loadGlow.BorderSizePixel    = 0
 loadGlow.ZIndex             = 101
 Instance.new("UICorner", loadGlow).CornerRadius = UDim.new(1, 0)
 
--- Card central
+-- Center card
 local loadCard = Instance.new("Frame", loadFrame)
 loadCard.Size               = UDim2.new(0, 300, 0, 220)
 loadCard.Position           = UDim2.new(0.5, -150, 0.5, -110)
@@ -141,7 +165,7 @@ local loadCardStroke = Instance.new("UIStroke", loadCard)
 loadCardStroke.Color     = CONFIG.BORDER_COLOR
 loadCardStroke.Thickness = 1.5
 
--- Linha accent topo
+-- Top accent line
 local loadAccentTop = Instance.new("Frame", loadCard)
 loadAccentTop.Size             = UDim2.new(1, 0, 0, 3)
 loadAccentTop.BackgroundColor3 = CONFIG.ACCENT_COLOR
@@ -155,7 +179,7 @@ loadAccentGrad.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(1,   CONFIG.ACCENT_COLOR),
 })
 
--- Ícone / logo pulsante
+-- Pulsing icon / logo
 local loadIcon = Instance.new("TextLabel", loadCard)
 loadIcon.Text                  = "⚔"
 loadIcon.Size                  = UDim2.new(0, 54, 0, 54)
@@ -166,7 +190,7 @@ loadIcon.TextSize              = 36
 loadIcon.Font                  = Enum.Font.GothamBold
 loadIcon.ZIndex                = 103
 
--- Título
+-- Title
 local loadTitle = Instance.new("TextLabel", loadCard)
 loadTitle.Text                  = "NEXUS HUB"
 loadTitle.Size                  = UDim2.new(1, -20, 0, 26)
@@ -180,7 +204,7 @@ loadTitle.ZIndex                = 103
 
 -- Status label
 local loadStatus = Instance.new("TextLabel", loadCard)
-loadStatus.Text                  = "🔍  Detectando jogo..."
+loadStatus.Text                  = "🔍  Detecting game..."
 loadStatus.Size                  = UDim2.new(1, -20, 0, 18)
 loadStatus.Position              = UDim2.new(0, 10, 0, 114)
 loadStatus.BackgroundTransparency = 1
@@ -190,7 +214,7 @@ loadStatus.Font                  = Enum.Font.Gotham
 loadStatus.TextXAlignment        = Enum.TextXAlignment.Center
 loadStatus.ZIndex                = 103
 
--- Barra de progresso (track)
+-- Progress bar (track)
 local loadBarTrack = Instance.new("Frame", loadCard)
 loadBarTrack.Size             = UDim2.new(1, -40, 0, 6)
 loadBarTrack.Position         = UDim2.new(0, 20, 0, 148)
@@ -211,7 +235,7 @@ loadBarGrad.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(1,   CONFIG.ACCENT_GLOW),
 })
 
--- Badge do jogo detectado
+-- Detected game badge
 local loadBadge = Instance.new("Frame", loadCard)
 loadBadge.Size             = UDim2.new(1, -40, 0, 28)
 loadBadge.Position         = UDim2.new(0, 20, 0, 168)
@@ -231,7 +255,7 @@ loadBadgeLabel.TextXAlignment        = Enum.TextXAlignment.Center
 loadBadgeLabel.ZIndex                = 104
 loadBadgeLabel.Text                  = ""
 
--- Animação de pulso do ícone
+-- Icon pulse animation
 task.spawn(function()
     while LoadGui.Parent do
         TweenService:Create(loadIcon, TweenInfo.new(0.7, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
@@ -243,14 +267,14 @@ task.spawn(function()
     end
 end)
 
--- Função para animar a barra de progresso
+-- Function to animate the progress bar
 local function setLoadProgress(pct, statusText)
     TweenService:Create(loadBarFill, TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
         {Size = UDim2.new(pct, 0, 1, 0)}):Play()
     if statusText then loadStatus.Text = statusText end
 end
 
--- Função para fechar o loading com animação
+-- Function to close loading with animation
 local function closeLoading()
     TweenService:Create(loadFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
         {BackgroundTransparency = 1}):Play()
@@ -262,72 +286,256 @@ local function closeLoading()
     end)
 end
 
--- ── Lógica de detecção ────────────────────
--- BindableEvent garante que DETECTED_GAME esteja definido antes de a GUI ser construída
+-- ── Detection logic ────────────────────
+-- BindableEvent ensures DETECTED_GAME is set before the GUI is built
 local _guiReady = Instance.new("BindableEvent")
 
 task.spawn(function()
-    setLoadProgress(0.15, "🔍  Detectando jogo...")
+    setLoadProgress(0.15, "🔍  Detecting game...")
     task.wait(0.4)
 
-    setLoadProgress(0.45, "📡  Consultando PlaceId...")
+    setLoadProgress(0.45, "📡  Querying PlaceId...")
     task.wait(0.3)
 
     local gameMode = detectGame()
     DETECTED_GAME = gameMode
 
-    setLoadProgress(0.75, "⚙️  Configurando módulos...")
+    setLoadProgress(0.75, "⚙️  Configuring modules...")
     task.wait(0.35)
 
     if gameMode == "phantom" then
-        loadBadge.BackgroundTransparency = 0
-        local stroke = Instance.new("UIStroke", loadBadge)
-        stroke.Color = CONFIG.SUCCESS; stroke.Thickness = 1
-        loadBadgeLabel.Text      = "✔  Phantom Ball / Bola Fantasma detectado"
-        loadBadgeLabel.TextColor3 = CONFIG.SUCCESS
+        -- ── Phantom Ball: show "not supported yet" popup ──────────────
+        -- Hides loading card and shows a warning modal instead
+        loadCard.Visible = false
+
+        -- Overlay card (wider to fit message)
+        local warnCard = Instance.new("Frame", loadFrame)
+        warnCard.Size             = UDim2.new(0, 360, 0, 280)
+        warnCard.Position         = UDim2.new(0.5, -180, 0.5, -140)
+        warnCard.BackgroundColor3 = CONFIG.BG_MID
+        warnCard.BorderSizePixel  = 0
+        warnCard.ZIndex           = 110
+        Instance.new("UICorner", warnCard).CornerRadius = UDim.new(0, 16)
+        local warnStroke = Instance.new("UIStroke", warnCard)
+        warnStroke.Color     = CONFIG.DANGER
+        warnStroke.Thickness = 1.5
+
+        -- Top accent line (red)
+        local warnTop = Instance.new("Frame", warnCard)
+        warnTop.Size             = UDim2.new(1, 0, 0, 3)
+        warnTop.BackgroundColor3 = CONFIG.DANGER
+        warnTop.BorderSizePixel  = 0
+        warnTop.ZIndex           = 111
+        Instance.new("UICorner", warnTop).CornerRadius = UDim.new(0, 16)
+
+        -- Icon
+        local warnIcon = Instance.new("TextLabel", warnCard)
+        warnIcon.Text                  = "⚠"
+        warnIcon.Size                  = UDim2.new(0, 40, 0, 40)
+        warnIcon.Position              = UDim2.new(0.5, -20, 0, 16)
+        warnIcon.BackgroundTransparency = 1
+        warnIcon.TextColor3            = CONFIG.DANGER
+        warnIcon.TextSize              = 28
+        warnIcon.Font                  = Enum.Font.GothamBold
+        warnIcon.ZIndex                = 112
+
+        -- Message text (English by default)
+        local MSG_EN = "The script isn't working for Phantom Ball\nright now; it's only working for Anime Ball.\nWe'll fix it soon."
+        local MSG_PT = "O script não está funcionando para o\nPhantom Ball agora; só está funcionando\npara o Anime Ball. Vamos corrigir em breve."
+        local langPT = false
+
+        local warnText = Instance.new("TextLabel", warnCard)
+        warnText.Text                  = MSG_EN
+        warnText.Size                  = UDim2.new(1, -28, 0, 70)
+        warnText.Position              = UDim2.new(0, 14, 0, 62)
+        warnText.BackgroundTransparency = 1
+        warnText.TextColor3            = CONFIG.TEXT_PRIMARY
+        warnText.TextSize              = 12
+        warnText.Font                  = Enum.Font.Gotham
+        warnText.TextXAlignment        = Enum.TextXAlignment.Center
+        warnText.TextWrapped           = true
+        warnText.ZIndex                = 112
+
+        -- ── Language toggle ──────────────────────────
+        local langContainer = Instance.new("Frame", warnCard)
+        langContainer.Size             = UDim2.new(1, -28, 0, 32)
+        langContainer.Position         = UDim2.new(0, 14, 0, 140)
+        langContainer.BackgroundColor3 = CONFIG.BG_PANEL
+        langContainer.BorderSizePixel  = 0
+        langContainer.ZIndex           = 112
+        Instance.new("UICorner", langContainer).CornerRadius = UDim.new(0, 8)
+        local langContStroke = Instance.new("UIStroke", langContainer)
+        langContStroke.Color     = CONFIG.BORDER_COLOR
+        langContStroke.Thickness = 1
+
+        local langLabel = Instance.new("TextLabel", langContainer)
+        langLabel.Text                  = "🇧🇷  Português"
+        langLabel.Size                  = UDim2.new(1, -70, 1, 0)
+        langLabel.Position              = UDim2.new(0, 12, 0, 0)
+        langLabel.BackgroundTransparency = 1
+        langLabel.TextColor3            = CONFIG.TEXT_SECONDARY
+        langLabel.TextSize              = 11
+        langLabel.Font                  = Enum.Font.GothamSemibold
+        langLabel.TextXAlignment        = Enum.TextXAlignment.Left
+        langLabel.ZIndex                = 113
+
+        local langTrack = Instance.new("Frame", langContainer)
+        langTrack.Size             = UDim2.new(0, 38, 0, 20)
+        langTrack.Position         = UDim2.new(1, -48, 0.5, -10)
+        langTrack.BackgroundColor3 = CONFIG.TOGGLE_OFF
+        langTrack.BorderSizePixel  = 0
+        langTrack.ZIndex           = 113
+        Instance.new("UICorner", langTrack).CornerRadius = UDim.new(1, 0)
+
+        local langThumb = Instance.new("Frame", langTrack)
+        langThumb.Size             = UDim2.new(0, 16, 0, 16)
+        langThumb.Position         = UDim2.new(0, 2, 0.5, -8)
+        langThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        langThumb.BorderSizePixel  = 0
+        langThumb.ZIndex           = 114
+        Instance.new("UICorner", langThumb).CornerRadius = UDim.new(1, 0)
+
+        local langBusy = false
+        local langHitbox = Instance.new("TextButton", langContainer)
+        langHitbox.Size                  = UDim2.new(1, 0, 1, 0)
+        langHitbox.BackgroundTransparency = 1
+        langHitbox.Text                  = ""
+        langHitbox.ZIndex                = 115
+
+        langHitbox.MouseButton1Click:Connect(function()
+            if langBusy then return end
+            langBusy = true
+            langPT   = not langPT
+            if langPT then
+                TweenService:Create(langTrack, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(0, 200, 100)}):Play()
+                TweenService:Create(langThumb, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                    {Position = UDim2.new(0, 20, 0.5, -8)}):Play()
+                warnText.Text = MSG_PT
+            else
+                TweenService:Create(langTrack, TweenInfo.new(0.2), {BackgroundColor3 = CONFIG.TOGGLE_OFF}):Play()
+                TweenService:Create(langThumb, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                    {Position = UDim2.new(0, 2, 0.5, -8)}):Play()
+                warnText.Text = MSG_EN
+            end
+            task.delay(0.25, function() langBusy = false end)
+        end)
+
+        -- ── Buttons row ──────────────────────────────
+        local ANIME_PLACE_ID = "5120885191"
+
+        local enterBtn = Instance.new("TextButton", warnCard)
+        enterBtn.Size             = UDim2.new(0, 158, 0, 36)
+        enterBtn.Position         = UDim2.new(0, 14, 0, 190)
+        enterBtn.BackgroundColor3 = Color3.fromRGB(251, 146, 60)
+        enterBtn.BorderSizePixel  = 0
+        enterBtn.TextColor3       = Color3.fromRGB(255, 255, 255)
+        enterBtn.TextSize         = 12
+        enterBtn.Font             = Enum.Font.GothamBold
+        enterBtn.Text             = "Enter Anime Ball 🏮"
+        enterBtn.ZIndex           = 112
+        Instance.new("UICorner", enterBtn).CornerRadius = UDim.new(0, 10)
+
+        local cancelBtn = Instance.new("TextButton", warnCard)
+        cancelBtn.Size             = UDim2.new(0, 158, 0, 36)
+        cancelBtn.Position         = UDim2.new(0, 188, 0, 190)
+        cancelBtn.BackgroundColor3 = CONFIG.BG_PANEL
+        cancelBtn.BorderSizePixel  = 0
+        cancelBtn.TextColor3       = CONFIG.TEXT_SECONDARY
+        cancelBtn.TextSize         = 12
+        cancelBtn.Font             = Enum.Font.GothamSemibold
+        cancelBtn.Text             = "Cancel"
+        cancelBtn.ZIndex           = 112
+        Instance.new("UICorner", cancelBtn).CornerRadius = UDim.new(0, 10)
+        local cancelStroke = Instance.new("UIStroke", cancelBtn)
+        cancelStroke.Color     = CONFIG.BORDER_COLOR
+        cancelStroke.Thickness = 1
+
+        -- Button hover effects
+        enterBtn.MouseEnter:Connect(function()
+            TweenService:Create(enterBtn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(255, 165, 80)}):Play()
+        end)
+        enterBtn.MouseLeave:Connect(function()
+            TweenService:Create(enterBtn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(251, 146, 60)}):Play()
+        end)
+        cancelBtn.MouseEnter:Connect(function()
+            TweenService:Create(cancelBtn, TweenInfo.new(0.12), {BackgroundColor3 = Color3.fromRGB(40, 40, 60)}):Play()
+        end)
+        cancelBtn.MouseLeave:Connect(function()
+            TweenService:Create(cancelBtn, TweenInfo.new(0.12), {BackgroundColor3 = CONFIG.BG_PANEL}):Play()
+        end)
+
+        -- "Enter Anime Ball" → teleport to Anime Ball via PlaceId
+        enterBtn.MouseButton1Click:Connect(function()
+            enterBtn.Text    = "Joining..."
+            enterBtn.Active  = false
+            cancelBtn.Active = false
+            TweenService:Create(warnCard, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+                {Position = UDim2.new(0.5, -180, 0.6, -140), BackgroundTransparency = 1}):Play()
+            task.delay(0.35, function()
+                game:GetService("TeleportService"):Teleport(tonumber(ANIME_PLACE_ID), LocalPlayer)
+            end)
+        end)
+
+        -- "Cancel" → close everything without loading script
+        cancelBtn.MouseButton1Click:Connect(function()
+            TweenService:Create(loadFrame, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
+                {BackgroundTransparency = 1}):Play()
+            TweenService:Create(warnCard, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.In),
+                {Position = UDim2.new(0.5, -180, 0.6, -140), BackgroundTransparency = 1}):Play()
+            task.delay(0.5, function() LoadGui:Destroy() end)
+        end)
+
+        -- Entrance animation
+        warnCard.Position = UDim2.new(0.5, -180, 0.4, -140)
+        warnCard.BackgroundTransparency = 1
+        TweenService:Create(warnCard, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            {Position = UDim2.new(0.5, -180, 0.5, -140), BackgroundTransparency = 0}):Play()
+
+        -- Script does NOT continue — no _guiReady fired
+        return
     elseif gameMode == "anime" then
         loadBadge.BackgroundTransparency = 0
         local stroke = Instance.new("UIStroke", loadBadge)
         stroke.Color = Color3.fromRGB(251, 146, 60); stroke.Thickness = 1
-        loadBadgeLabel.Text       = "✔  Anime Ball / Bola De Anime detectado"
+        loadBadgeLabel.Text       = "✔  Anime Ball detected"
         loadBadgeLabel.TextColor3 = Color3.fromRGB(251, 146, 60)
     else
-        -- Jogo não suportado: mostra erro e encerra sem carregar a GUI
+        -- Unsupported game: shows error and exits without loading the GUI
         loadBadge.BackgroundTransparency = 0
         local stroke = Instance.new("UIStroke", loadBadge)
         stroke.Color = CONFIG.DANGER; stroke.Thickness = 1
-        loadBadgeLabel.Text       = "✖  Jogo não suportado"
+        loadBadgeLabel.Text       = "✖  Unsupported game"
         loadBadgeLabel.TextColor3 = CONFIG.DANGER
 
-        setLoadProgress(1, "✖  Script não carregado.")
+        setLoadProgress(1, "✖  Script not loaded.")
         loadStatus.TextColor3 = CONFIG.DANGER
 
-        -- Pulsa o card em vermelho para indicar erro
+        -- Pulses the card red to indicate error
         TweenService:Create(loadCardStroke, TweenInfo.new(0.3), {Color = CONFIG.DANGER}):Play()
         TweenService:Create(loadIcon,       TweenInfo.new(0.3), {TextColor3 = CONFIG.DANGER}):Play()
 
         task.wait(3)
 
-        -- Fecha o loading e destrói tudo sem carregar a GUI
+        -- Closes loading and destroys everything without loading the GUI
         TweenService:Create(loadFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
             {BackgroundTransparency = 1}):Play()
         TweenService:Create(loadCard, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.In),
             {Position = UDim2.new(0.5, -150, 0.6, -110), BackgroundTransparency = 1}):Play()
         task.wait(0.55)
         LoadGui:Destroy()
-        -- NÃO dispara _guiReady — o script para aqui
+        -- Does NOT fire _guiReady — script stops here
         return
     end
 
-    setLoadProgress(1, "✔  Pronto!")
+    setLoadProgress(1, "✔  Ready!")
     task.wait(0.8)
     closeLoading()
 
-    -- Sinaliza: GUI pode ser construída agora
+    -- Signal: GUI can now be built
     _guiReady:Fire()
 end)
 
--- Aguarda a detecção terminar antes de construir a GUI (bloqueia esta coroutine)
+-- Wait for detection to finish before building GUI (blocks this coroutine)
 _guiReady.Event:Wait()
 _guiReady:Destroy()
 
@@ -339,7 +547,7 @@ ScreenGui.IgnoreGuiInset  = true
 ScreenGui.Parent          = LocalPlayer:WaitForChild("PlayerGui")
 
 -- ══════════════════════════════════════════
---              JANELA PRINCIPAL
+--              MAIN WINDOW
 -- ══════════════════════════════════════════
 local MainFrame = Instance.new("Frame")
 MainFrame.Name               = "MainFrame"
@@ -356,7 +564,7 @@ local mainStroke = Instance.new("UIStroke", MainFrame)
 mainStroke.Color     = CONFIG.BORDER_COLOR
 mainStroke.Thickness = 1.5
 
--- Glow de fundo
+-- Background glow
 local glowBg = Instance.new("Frame", MainFrame)
 glowBg.Size                   = UDim2.new(1,0,1,0)
 glowBg.BackgroundTransparency = 1
@@ -372,6 +580,30 @@ glowGrad.Rotation    = 135
 glowGrad.Transparency = NumberSequence.new({
     NumberSequenceKeypoint.new(0,   0.92),
     NumberSequenceKeypoint.new(0.4, 1),
+    NumberSequenceKeypoint.new(1,   1),
+})
+
+-- Modern diagonal gradient on main background
+local mainGradFrame = Instance.new("Frame", MainFrame)
+mainGradFrame.Name                   = "MainGradFrame"
+mainGradFrame.Size                   = UDim2.new(1, 0, 1, 0)
+mainGradFrame.BackgroundColor3       = Color3.fromRGB(255, 255, 255)
+mainGradFrame.BackgroundTransparency = 1
+mainGradFrame.BorderSizePixel        = 0
+mainGradFrame.ZIndex                 = 0
+
+local mainGradient = Instance.new("UIGradient", mainGradFrame)
+mainGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0,    CONFIG.ACCENT_GLOW),
+    ColorSequenceKeypoint.new(0.35, CONFIG.ACCENT_COLOR),
+    ColorSequenceKeypoint.new(0.65, CONFIG.BG_MID),
+    ColorSequenceKeypoint.new(1,    CONFIG.BG_DARK),
+})
+mainGradient.Rotation = 145
+mainGradient.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0,   0.82),
+    NumberSequenceKeypoint.new(0.3, 0.93),
+    NumberSequenceKeypoint.new(0.6, 0.97),
     NumberSequenceKeypoint.new(1,   1),
 })
 
@@ -414,7 +646,7 @@ logoDot.BorderSizePixel  = 0
 logoDot.ZIndex           = 3
 Instance.new("UICorner", logoDot).CornerRadius = UDim.new(1, 0)
 
--- Título texto
+-- Title texto
 local titleLabel = Instance.new("TextLabel", TitleBar)
 titleLabel.Text                  = "NEXUS HUB"
 titleLabel.Size                  = UDim2.new(0, 200, 1, 0)
@@ -653,7 +885,7 @@ local function createTab(name, icon)
 end
 
 -- ══════════════════════════════════════════
---         COMPONENTES DE UI
+--         UI COMPONENTS
 -- ══════════════════════════════════════════
 local function createToggle(parent, labelText, description, onToggle)
     local container = Instance.new("Frame", parent)
@@ -773,7 +1005,7 @@ local function createSeparator(parent)
 end
 
 -- ══════════════════════════════════════════
---         TAB COMBAT
+--         COMBAT TAB
 -- ══════════════════════════════════════════
 local CombatPage = createTab("Combat", "⚔")
 
@@ -789,10 +1021,10 @@ combatHeader.ZIndex                = 3
 
 createSeparator(CombatPage)
 
-local detectorStatus = createStatusLabel(CombatPage, "◉  Auto Parry: Inativo")
+local detectorStatus = createStatusLabel(CombatPage, "◉  Auto Parry: Inactive")
 local distInfo       = createStatusLabel(CombatPage, "")
 
--- ── Dropdown: Modo do Parry ────────────────
+-- ── Dropdown: Parry Mode ────────────────
 local dropdownContainer = Instance.new("Frame", CombatPage)
 dropdownContainer.Size             = UDim2.new(1, 0, 0, 54)
 dropdownContainer.BackgroundColor3 = CONFIG.BG_PANEL
@@ -812,7 +1044,7 @@ dropLabel.TextSize = 10; dropLabel.Font = Enum.Font.Gotham
 dropLabel.TextXAlignment = Enum.TextXAlignment.Left
 dropLabel.ZIndex = 11
 
--- Botão do dropdown
+-- Dropdown button
 local dropBtn = Instance.new("TextButton", dropdownContainer)
 dropBtn.Size             = UDim2.new(1, -28, 0, 24)
 dropBtn.Position         = UDim2.new(0, 14, 0, 24)
@@ -828,11 +1060,11 @@ Instance.new("UICorner", dropBtn).CornerRadius = UDim.new(0, 6)
 local dropBtnStroke = Instance.new("UIStroke", dropBtn)
 dropBtnStroke.Color = CONFIG.BORDER_COLOR; dropBtnStroke.Thickness = 1
 
--- Padding interno do botão
+-- Inner button padding
 local dropBtnPad = Instance.new("UIPadding", dropBtn)
 dropBtnPad.PaddingLeft = UDim.new(0, 8)
 
--- Ícone de seta
+-- Arrow icon
 local dropArrow = Instance.new("TextLabel", dropBtn)
 dropArrow.Text = "▾"
 dropArrow.Size = UDim2.new(0, 20, 1, 0)
@@ -842,7 +1074,7 @@ dropArrow.TextColor3 = CONFIG.TEXT_SECONDARY
 dropArrow.TextSize = 12; dropArrow.Font = Enum.Font.GothamBold
 dropArrow.ZIndex = 12
 
--- Menu de opções (aparece por cima)
+-- Options menu (appears on top)
 local dropMenu = Instance.new("Frame", ScreenGui)
 dropMenu.Size             = UDim2.new(0, 0, 0, 0)
 dropMenu.BackgroundColor3 = CONFIG.BG_MID
@@ -887,9 +1119,9 @@ local function selectOption(opt)
     closeDropMenu()
 end
 
--- Criar itens do menu (filtrados pelo jogo detectado)
+-- Create menu items (filtered by detected game)
 for _, opt in ipairs(OPTIONS) do
-    -- Filtra opções: "anime_button" só aparece no Anime Ball; "remote"/"button" só no Phantom/desconhecido
+    -- Filter options: "anime_button" only in Anime Ball; "remote"/"button" only in Phantom/unknown
     local show = true
     if opt.mode == "anime_button" and DETECTED_GAME ~= "anime" then show = false end
     if (opt.mode == "remote" or opt.mode == "button") and DETECTED_GAME == "anime" then show = false end
@@ -920,7 +1152,7 @@ for _, opt in ipairs(OPTIONS) do
     end)
 end
 
--- Configura modo automaticamente (DETECTED_GAME já definido antes da GUI ser construída)
+-- Auto-configure mode (DETECTED_GAME already set before GUI is built)
 if DETECTED_GAME == "anime" then
     State.parryMode = "anime_button"
     dropBtn.Text    = "🟠  Button (Anime Ball)"
@@ -949,7 +1181,7 @@ dropBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- Fechar menu ao clicar fora
+-- Close menu on outside click
 UserInputService.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 and dropOpen then
         task.wait()
@@ -958,12 +1190,12 @@ UserInputService.InputBegan:Connect(function(input)
 end)
 
 -- ══════════════════════════════════════════
---         SISTEMA AUTO PARRY
+--         AUTO PARRY SYSTEM
 -- ══════════════════════════════════════════
 local lastBallCFrame = nil
 local trackedSpeed   = 0
 
--- Optimizer: deleta e recria o remote event para limpar callbacks pendentes na fila
+-- Optimizer: deletes and recreates the remote event to clear pending callbacks in the queue
 local function optimizeRemote()
     if not State.optimizer then return end
     pcall(function()
@@ -972,23 +1204,23 @@ local function optimizeRemote()
             :WaitForChild("GeneratedNetworkRemotes")
         local re = folder:FindFirstChild("RE_4.6848415795802784e+76")
         if re then
-            -- Desconecta todos os OnClientEvent listeners locais
-            -- (limpa a fila de callbacks pendentes no client)
+            -- Disconnects all local OnClientEvent listeners
+            -- (clears the pending callback queue on the client)
             re.OnClientEvent:Connect(function() end) -- sobrescreve com handler vazio
-            -- Reconecta imediatamente para não deixar a fila acumular
+            -- Reconnects immediately to prevent queue buildup
         end
     end)
 end
 
--- Função unificada de parry (usada pelo Auto Parry e Auto Spam)
+-- Unified parry function (used by Auto Parry and Auto Spam)
 local function executeParry()
     if State.parryMode == "button" then
-        -- Modo Button (Phantom Ball): ImageButton BLOCK
+        -- Button Mode (Phantom Ball): ImageButton BLOCK
         pcall(function()
             local btn = game:GetService("Players").LocalPlayer
                 .PlayerGui.Interface.MobileUI.Buttons.Jump.BLOCK.Button
             if not btn or not btn:IsA("ImageButton") then
-                detectorStatus.Text = "◉  Erro: BLOCK.Button não é ImageButton"
+                detectorStatus.Text = "◉  Error: BLOCK.Button is not ImageButton"
                 return
             end
             btn:FireServer("MouseButton1Down")
@@ -997,7 +1229,7 @@ local function executeParry()
         State.parryCount = State.parryCount + 1
 
     elseif State.parryMode == "anime_button" then
-        -- Anime Ball: usa getconnections igual ao script de referência
+        -- Anime Ball: uses getconnections like the reference script
         pcall(function()
             local btn = LocalPlayer.PlayerGui:FindFirstChild("HUD")
             if not btn then return end
@@ -1008,7 +1240,7 @@ local function executeParry()
             btn = btn:FindFirstChild("Detection")
             if not btn then return end
             if not btn:IsA("TextButton") then
-                detectorStatus.Text = "◉  Erro: Detection não é TextButton"
+                detectorStatus.Text = "◉  Error: Detection is not TextButton"
                 return
             end
             for _, conn in pairs(getconnections(btn.MouseButton1Down)) do
@@ -1022,28 +1254,30 @@ local function executeParry()
         State.parryCount = State.parryCount + 1
 
     else
-        -- Modo Remote Event (Phantom Ball original)
+        -- Remote Event Mode
         local ok, err = pcall(function()
+            local args = {
+                buffer.fromstring("\001")
+            }
             game:GetService("ReplicatedStorage")
-                :WaitForChild("TS")
-                :WaitForChild("GeneratedNetworkRemotes")
-                :WaitForChild("RE_4.6848415795802784e+76")
-                :FireServer(2.933813859058389e+76)
+                :WaitForChild("Remotes")
+                :WaitForChild("RemoteEvent")
+                :FireServer(unpack(args))
         end)
         if ok then
             State.parryCount = State.parryCount + 1
             optimizeRemote()
         else
-            detectorStatus.Text = "◉  Erro: " .. tostring(err):sub(1, 40)
+            detectorStatus.Text = "◉  Error: " .. tostring(err):sub(1, 40)
             return
         end
     end
     TweenService:Create(detectorStatus, TweenInfo.new(0.1), {TextColor3 = CONFIG.SUCCESS}):Play()
-    detectorStatus.Text = "◉  Parry EXECUTADO!"
+    detectorStatus.Text = "◉  Parry EXECUTED!"
     task.delay(1.5, function()
         if State.autoParry then
             TweenService:Create(detectorStatus, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
-            detectorStatus.Text = "◉  Auto Parry: Monitorando..."
+            detectorStatus.Text = "◉  Auto Parry: Monitoring..."
         end
     end)
 end
@@ -1082,14 +1316,14 @@ local function startAutoParry()
     State.lastBallColor            = nil
     lastBallCFrame                 = nil
     trackedSpeed                   = 0
-    detectorStatus.Text = "◉  Auto Parry: Monitorando..."
+    detectorStatus.Text = "◉  Auto Parry: Monitoring..."
     TweenService:Create(detectorStatus, TweenInfo.new(0.3), {TextColor3 = CONFIG.SUCCESS}):Play()
     createDetector()
 
     -- ── ANIME BALL MODE ───────────────────────────────────────────────
     if DETECTED_GAME == "anime" then
 
-        -- ── Speed Detector: usa AssemblyLinearVelocity da bola (velocidade real do motor físico) ──
+        -- ── Speed Detector: uses AssemblyLinearVelocity of the ball (real physics velocity) ──
         State.lastSpeedCFrame   = nil
         State.animeTrackedSpeed = 0
         State.speedDetectorConn = RunService.Heartbeat:Connect(function()
@@ -1098,7 +1332,7 @@ local function startAutoParry()
                 State.animeTrackedSpeed = 0
                 return
             end
-            -- Pega o primeiro BasePart com cor diferente de Medium Stone Grey
+            -- Get first BasePart with color different from Medium Stone Grey
             local targetBall = nil
             local closestSpd = math.huge
             for _, obj in pairs(ballsFolder:GetChildren()) do
@@ -1115,11 +1349,11 @@ local function startAutoParry()
                 State.animeTrackedSpeed = 0
                 return
             end
-            -- AssemblyLinearVelocity é a velocidade física real do objeto — sem calcular delta
+            -- AssemblyLinearVelocity is the real physical velocity — no delta calculation
             State.animeTrackedSpeed = targetBall.AssemblyLinearVelocity.Magnitude
         end)
 
-        -- ── Parry Loop: usa a velocidade já calculada pelo speed detector ──
+        -- ── Parry Loop: uses velocity already calculated by the speed detector ──
         State.runConnection = RunService.Heartbeat:Connect(function()
             if not State.autoParry then return end
             local char = LocalPlayer.Character
@@ -1129,12 +1363,12 @@ local function startAutoParry()
 
             local ballsFolder = workspace:FindFirstChild("Balls")
             if not ballsFolder then
-                distInfo.Text  = "  workspace.Balls não encontrado..."
+                distInfo.Text  = "  workspace.Balls not found..."
                 State.hasExecutedThisDetection = false
                 return
             end
 
-            -- Pega a bola mais próxima do player (suporta Model e BasePart)
+            -- Get closest ball to player (supports Model and BasePart)
             local targetBall = nil
             local closestDist = math.huge
             for _, obj in pairs(ballsFolder:GetChildren()) do
@@ -1149,13 +1383,13 @@ local function startAutoParry()
             end
 
             if not targetBall then
-                distInfo.Text  = "  Aguardando bola ativa..."
+                distInfo.Text  = "  Waiting for active ball..."
                 State.hasExecutedThisDetection = false
                 State.ballWasInside            = false
                 return
             end
 
-            -- Raio Anime Ball: CONFIG.PARRY_DIST + math.floor(velocity / 3.90)
+            -- Anime Ball radius: CONFIG.PARRY_DIST + math.floor(velocity / 3.90)
             local velocity = State.animeTrackedSpeed
             local radius = math.clamp(
                 CONFIG.PARRY_DIST + math.floor(velocity / 3.90),
@@ -1163,14 +1397,14 @@ local function startAutoParry()
                 300
             )
 
-            -- Atualiza detector visual
+            -- Update visual detector
             if State.detectorPart then
                 State.detectorPart.CFrame = CFrame.new(hrp.CFrame.Position)
                 State.detectorPart.Size   = Vector3.new(radius * 2, radius * 2, radius * 2)
                 State.detectorPart.Transparency = State.showDetectors and 0.6 or 1
             end
 
-            distInfo.Text = string.format("  Vel: %.1f s/s  |  Raio: %d st  |  Bola: %s",
+            distInfo.Text = string.format("  Vel: %.1f s/s  |  Radius: %d st  |  Ball: %s",
                 velocity, radius, targetBall.Name)
 
             local dist = closestDist  -- já calculado acima
@@ -1180,7 +1414,7 @@ local function startAutoParry()
                 State.ballWasInside            = false
             end
 
-            -- Dispara quando: bola encostou no detector E LocalPlayer tem Highlight em workspace
+            -- Fires when: ball touched detector AND LocalPlayer has Highlight in workspace
             local localHighlight = workspace:FindFirstChild(LocalPlayer.Name)
                 and workspace:FindFirstChild(LocalPlayer.Name):FindFirstChildWhichIsA("Highlight")
             if dist <= radius and localHighlight then
@@ -1205,7 +1439,7 @@ local function startAutoParry()
             end
         end)
 
-    -- ── PHANTOM BALL MODE (padrão) ────────────────────────────────────
+    -- ── PHANTOM BALL MODE (default) ────────────────────────────────────
     else
         State.runConnection = RunService.Heartbeat:Connect(function(dt)
             if not State.autoParry then return end
@@ -1216,7 +1450,7 @@ local function startAutoParry()
 
             local ball = workspace:FindFirstChild("GameBall")
             if not ball or not ball:IsA("BasePart") then
-                distInfo.Text  = "  GameBall não encontrado..."
+                distInfo.Text  = "  GameBall not found..."
                 lastBallCFrame = nil
                 State.hasExecutedThisDetection = false
                 State.lastBallColor            = nil
@@ -1242,42 +1476,40 @@ local function startAutoParry()
                 State.detectorPart.Transparency = State.showDetectors and 0.6 or 1
             end
 
-            distInfo.Text = string.format("  Vel: %.1f s/s  |  Raio: %d st", trackedSpeed, radius)
+            distInfo.Text = string.format("  Vel: %.1f s/s  |  Radius: %d st", trackedSpeed, radius)
 
+            local dist = (hrp.Position - ball.Position).Magnitude
+
+            -- Reset apenas quando a bola SAI do detector (independente da cor)
+            if dist > radius then
+                State.hasExecutedThisDetection = false
+                State.ballWasInside            = false
+            end
+
+            -- Cor mudou → reseta execução para permitir novo parry, mas mantém posição
             local curColor = ball.BrickColor
             if State.lastBallColor ~= curColor then
                 State.hasExecutedThisDetection = false
                 State.lastBallColor            = curColor
             end
 
-            local dist = (hrp.Position - ball.Position).Magnitude
-
-            if State.ballWasInside and dist > radius then
-                State.hasExecutedThisDetection = false
-                State.ballWasInside            = false
-            end
-
-            if ball.BrickColor == BrickColor.new("Bright red") then
-                if dist <= radius then
-                    State.ballWasInside = true
-                    if not State.hasExecutedThisDetection then
-                        State.hasExecutedThisDetection = true
-                        if State.detectorPart and State.showDetectors then
-                            State.detectorPart.BrickColor  = BrickColor.new("Bright red")
-                            State.detectorPart.Transparency = 0.25
-                            task.delay(0.4, function()
-                                if State.detectorPart then
-                                    State.detectorPart.BrickColor  = BrickColor.new("Dark blue")
-                                    State.detectorPart.Transparency = 0.6
-                                end
-                            end)
-                        end
-                        executeParry()
+            -- Dispara somente quando: bola Bright red + dentro do raio
+            if ball.BrickColor == BrickColor.new("Bright red") and dist <= radius then
+                State.ballWasInside = true
+                if not State.hasExecutedThisDetection then
+                    State.hasExecutedThisDetection = true
+                    if State.detectorPart and State.showDetectors then
+                        State.detectorPart.BrickColor  = BrickColor.new("Bright red")
+                        State.detectorPart.Transparency = 0.25
+                        task.delay(0.4, function()
+                            if State.detectorPart then
+                                State.detectorPart.BrickColor  = BrickColor.new("Dark blue")
+                                State.detectorPart.Transparency = 0.6
+                            end
+                        end)
                     end
+                    executeParry()
                 end
-            else
-                State.hasExecutedThisDetection = false
-                State.ballWasInside            = false
             end
         end)
     end
@@ -1290,22 +1522,22 @@ local function stopAutoParry()
     lastBallCFrame                 = nil
     trackedSpeed                   = 0
     destroyDetector()
-    detectorStatus.Text = "◉  Auto Parry: Inativo"
+    detectorStatus.Text = "◉  Auto Parry: Inactive"
     TweenService:Create(detectorStatus, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
     distInfo.Text = ""
 end
 
--- Toggle com callback direto
-createToggle(CombatPage, "Auto Parry", "Detecta GameBall e executa parry automático", function(on)
+-- Toggle with direct callback
+createToggle(CombatPage, "Auto Parry", "Detects GameBall and executes automatic parry", function(on)
     if on then startAutoParry() else stopAutoParry() end
 end)
 
 createSeparator(CombatPage)
 
 -- ── AUTO SPAM ─────────────────────────────
-local spamStatus = createStatusLabel(CombatPage, "◉  Auto Spam: Inativo")
+local spamStatus = createStatusLabel(CombatPage, "◉  Auto Spam: Inactive")
 
-local SPAM_DIST = 45  -- raio fixo do detector de spam
+local SPAM_DIST = 50  -- raio fixo do detector de spam
 
 local function createSpamDetector()
     if State.spamDetectorPart then State.spamDetectorPart:Destroy() end
@@ -1337,7 +1569,7 @@ end
 local function startSpamLoop()
     if State.spamActive then return end
     State.spamActive = true
-    spamStatus.Text  = "◉  Auto Spam: SPAMANDO!"
+    spamStatus.Text  = "◉  Auto Spam: SPAMMING!"
     TweenService:Create(spamStatus, TweenInfo.new(0.1), {TextColor3 = CONFIG.DANGER}):Play()
     State.spamLoopConn = RunService.Heartbeat:Connect(function()
         if not State.spamActive then return end
@@ -1371,11 +1603,13 @@ local function startSpamLoop()
             end)
         else
             local re = game:GetService("ReplicatedStorage")
-                :WaitForChild("TS")
-                :WaitForChild("GeneratedNetworkRemotes")
-                :WaitForChild("RE_4.6848415795802784e+76")
+                :WaitForChild("Remotes")
+                :WaitForChild("RemoteEvent")
             for i = 1, State.spamMultiplier do
-                pcall(function() re:FireServer(2.933813859058389e+76) end)
+                pcall(function()
+                    local args = { buffer.fromstring("\001") }
+                    re:FireServer(unpack(args))
+                end)
                 State.spamCount = State.spamCount + 1
             end
             optimizeRemote()
@@ -1387,17 +1621,17 @@ local function stopSpamLoop()
     if not State.spamActive then return end
     State.spamActive = false
     if State.spamLoopConn then State.spamLoopConn:Disconnect(); State.spamLoopConn = nil end
-    spamStatus.Text = "◉  Auto Spam: Monitorando..."
+    spamStatus.Text = "◉  Auto Spam: Monitoring..."
     TweenService:Create(spamStatus, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
 end
 
 local function startAutoSpam()
     State.autoSpam = true
-    spamStatus.Text = "◉  Auto Spam: Monitorando..."
+    spamStatus.Text = "◉  Auto Spam: Monitoring..."
     TweenService:Create(spamStatus, TweenInfo.new(0.3), {TextColor3 = CONFIG.SUCCESS}):Play()
     createSpamDetector()
 
-    -- Nome do player salvo (mesmo após perder o highlight)
+    -- Saved player name (even after losing highlight)
     local savedTargetName = nil
 
     State.spamConnection = RunService.Heartbeat:Connect(function()
@@ -1408,7 +1642,7 @@ local function startAutoSpam()
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
 
-        -- Atualizar posição do detector
+        -- Update detector position
         if State.spamDetectorPart then
             State.spamDetectorPart.CFrame = CFrame.new(hrp.CFrame.Position)
             State.spamDetectorPart.Transparency = State.showDetectors and 0.6 or 1
@@ -1419,7 +1653,7 @@ local function startAutoSpam()
             local ballsFolder = workspace:FindFirstChild("Balls")
             if not ballsFolder then stopSpamLoop(); return end
 
-            -- Pega bola mais próxima (suporta Model e BasePart)
+            -- Get closest ball (supports Model and BasePart)
             local closestBall, closestDist = nil, math.huge
             for _, obj in pairs(ballsFolder:GetChildren()) do
                 local part = obj:IsA("Model") and obj:FindFirstChildWhichIsA("BasePart") or obj
@@ -1436,9 +1670,9 @@ local function startAutoSpam()
 
             local ballInDetector = closestDist <= SPAM_DIST
 
-            -- Verifica players dentro do detector com Highlight → salva nome
-            -- Quando player perde o Highlight mas ainda está no detector → mantém nome salvo
-            -- Quando player sai do detector → deleta nome salvo
+            -- Check players inside detector with Highlight → save name
+            -- When player loses Highlight but is still in detector → keep saved name
+            -- When player leaves detector → delete saved name
             for _, player in pairs(Players:GetPlayers()) do
                 if player == LocalPlayer then continue end
                 local pChar = player.Character
@@ -1449,15 +1683,15 @@ local function startAutoSpam()
                 local pDist = (pHRP.Position - hrp.Position).Magnitude
 
                 if pDist <= SPAM_DIST then
-                    -- Player dentro do detector: salva nome se tiver Highlight
+                    -- Player inside detector: save name if they have Highlight
                     local hasHighlight = pChar:FindFirstChildWhichIsA("Highlight") ~= nil
                     if hasHighlight then
                         savedTargetName       = player.Name
                         State.savedSpamTarget = player.Name
                     end
-                    -- Se perdeu o Highlight mas ainda está no detector → mantém nome salvo (não limpa)
+                    -- If lost Highlight but still in detector → keep saved name (do not clear)
                 else
-                    -- Player saiu do detector → limpa nome salvo se for ele
+                    -- Player left detector → clear saved name if it is them
                     if savedTargetName == player.Name then
                         savedTargetName       = nil
                         State.savedSpamTarget = nil
@@ -1465,7 +1699,7 @@ local function startAutoSpam()
                 end
             end
 
-            -- Eu (LocalPlayer) com Highlight + bola no detector + target salvo → spama
+            -- Me (LocalPlayer) with Highlight + ball in detector + saved target → spam
             local myChar = LocalPlayer.Character
             local myHighlight = myChar and myChar:FindFirstChildWhichIsA("Highlight") ~= nil
 
@@ -1483,8 +1717,9 @@ local function startAutoSpam()
             local ballInDetector = false
             if ball and ball:IsA("BasePart") then
                 local ballDist = (hrp.Position - ball.Position).Magnitude
-                if ballDist <= SPAM_DIST and ball.BrickColor == BrickColor.new("Bright red") then
-                    ballInDetector = true
+                -- Verifica distância e cor separadamente para não perder frames de transição
+                if ballDist <= SPAM_DIST then
+                    ballInDetector = ball.BrickColor == BrickColor.new("Bright red")
                 end
             end
 
@@ -1529,15 +1764,15 @@ local function stopAutoSpam()
     State.autoSpam = false
     stopSpamLoop()
     destroySpamDetector()
-    spamStatus.Text = "◉  Auto Spam: Inativo"
+    spamStatus.Text = "◉  Auto Spam: Inactive"
     TweenService:Create(spamStatus, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
 end
 
-createToggle(CombatPage, "Auto Spam", "Spama parry quando detectar player com highlight (35m)", function(on)
+createToggle(CombatPage, "Auto Spam", "Spams parry when detecting player with highlight (35m)", function(on)
     if on then startAutoSpam() else stopAutoSpam() end
 end)
 
--- ── Slider Power do Spam ──────────────────
+-- ── Spam Power Slider ──────────────────
 local sliderContainer = Instance.new("Frame", CombatPage)
 sliderContainer.Size             = UDim2.new(1, 0, 0, 72)
 sliderContainer.BackgroundColor3 = CONFIG.BG_PANEL
@@ -1569,7 +1804,7 @@ sliderValueLabel.Font = Enum.Font.GothamBold
 sliderValueLabel.TextXAlignment = Enum.TextXAlignment.Right
 sliderValueLabel.ZIndex = 4
 
--- Descrição dinâmica: "Xx Power = X Heartbeats/frame"
+-- Dynamic description: "Xx Power = X Heartbeats/frame"
 local sliderDesc = Instance.new("TextLabel", sliderContainer)
 sliderDesc.Text = "1x Power  =  1 Heartbeat/frame"
 sliderDesc.Size = UDim2.new(1, -28, 0, 14)
@@ -1581,7 +1816,7 @@ sliderDesc.Font = Enum.Font.Gotham
 sliderDesc.TextXAlignment = Enum.TextXAlignment.Left
 sliderDesc.ZIndex = 4
 
--- Track do slider
+-- Slider track
 local sliderTrack = Instance.new("Frame", sliderContainer)
 sliderTrack.Size = UDim2.new(1, -28, 0, 6)
 sliderTrack.Position = UDim2.new(0, 14, 0, 50)
@@ -1590,7 +1825,7 @@ sliderTrack.BorderSizePixel = 0
 sliderTrack.ZIndex = 4
 Instance.new("UICorner", sliderTrack).CornerRadius = UDim.new(1, 0)
 
--- Fill do slider
+-- Slider fill
 local sliderFill = Instance.new("Frame", sliderTrack)
 sliderFill.Size = UDim2.new(0, 0, 1, 0)
 sliderFill.BackgroundColor3 = CONFIG.ACCENT_COLOR
@@ -1607,7 +1842,7 @@ sliderKnob.BorderSizePixel = 0
 sliderKnob.ZIndex = 6
 Instance.new("UICorner", sliderKnob).CornerRadius = UDim.new(1, 0)
 
--- Slider lógica (1x a 100x)
+-- Slider logic (1x to 100x)
 local SLIDER_MIN, SLIDER_MAX = 1, 100
 local sliderDragging = false
 
@@ -1648,7 +1883,7 @@ end)
 
 createSeparator(CombatPage)
 
--- ── Botão de Teste: Clique no BLOCK.Button ─
+-- ── Test Button: Click on BLOCK.Button ─
 local testBtnContainer = Instance.new("Frame", CombatPage)
 testBtnContainer.Size             = UDim2.new(1, 0, 0, 54)
 testBtnContainer.BackgroundColor3 = CONFIG.BG_PANEL
@@ -1670,7 +1905,7 @@ testBtnLabel.TextXAlignment = Enum.TextXAlignment.Left
 testBtnLabel.ZIndex = 4
 
 local testBtnDesc = Instance.new("TextLabel", testBtnContainer)
-testBtnDesc.Text = "Clica 1x no Button para testar"
+testBtnDesc.Text = "Click the Button once to test"
 testBtnDesc.Size = UDim2.new(0.7, 0, 0, 14)
 testBtnDesc.Position = UDim2.new(0, 14, 0, 30)
 testBtnDesc.BackgroundTransparency = 1
@@ -1681,7 +1916,7 @@ testBtnDesc.TextXAlignment = Enum.TextXAlignment.Left
 testBtnDesc.ZIndex = 4
 
 local testBtn = Instance.new("TextButton", testBtnContainer)
-testBtn.Text = "▶  Testar"
+testBtn.Text = "▶  Test"
 testBtn.Size = UDim2.new(0, 80, 0, 28)
 testBtn.Position = UDim2.new(1, -94, 0.5, -14)
 testBtn.BackgroundColor3 = CONFIG.ACCENT_COLOR
@@ -1704,7 +1939,7 @@ testBtn.MouseButton1Click:Connect(function()
     local ok, btn
 
     if DETECTED_GAME == "anime" then
-        -- Anime Ball: testa o TextButton Detection
+        -- Anime Ball: tests the TextButton Detection
         testBtnLabel.Text = "Test Detection Button"
         ok, btn = pcall(function()
             return game:GetService("Players").LocalPlayer
@@ -1715,29 +1950,29 @@ testBtn.MouseButton1Click:Connect(function()
                 :WaitForChild("Detection", 3)
         end)
         if not ok or not btn then
-            testBtnDesc.Text = "❌ Erro: Detection não encontrado!"
+            testBtnDesc.Text = "❌ Error: Detection not found!"
             TweenService:Create(testBtnDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.DANGER}):Play()
             TweenService:Create(testBtn,    TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.DANGER}):Play()
             task.delay(2, function()
-                testBtnDesc.Text = "Clica 1x no Button para testar"
+                testBtnDesc.Text = "Click the Button once to test"
                 TweenService:Create(testBtnDesc, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
                 TweenService:Create(testBtn,    TweenInfo.new(0.3), {BackgroundColor3 = CONFIG.ACCENT_COLOR}):Play()
             end)
             return
         end
         if not btn:IsA("TextButton") then
-            testBtnDesc.Text = "❌ Erro: Detection não é TextButton!"
+            testBtnDesc.Text = "❌ Error: Detection is not a TextButton!"
             TweenService:Create(testBtnDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.DANGER}):Play()
             TweenService:Create(testBtn,    TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.DANGER}):Play()
             task.delay(2, function()
-                testBtnDesc.Text = "Clica 1x no Button para testar"
+                testBtnDesc.Text = "Click the Button once to test"
                 TweenService:Create(testBtnDesc, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
                 TweenService:Create(testBtn,    TweenInfo.new(0.3), {BackgroundColor3 = CONFIG.ACCENT_COLOR}):Play()
             end)
             return
         end
     else
-        -- Phantom Ball: testa o ImageButton BLOCK.Button
+        -- Phantom Ball: tests the ImageButton BLOCK.Button
         testBtnLabel.Text = "Test BLOCK Button"
         ok, btn = pcall(function()
             return game:GetService("Players").LocalPlayer
@@ -1750,22 +1985,22 @@ testBtn.MouseButton1Click:Connect(function()
                 :WaitForChild("Button", 3)
         end)
         if not ok or not btn then
-            testBtnDesc.Text = "❌ Erro: BLOCK.Button não encontrado!"
+            testBtnDesc.Text = "❌ Error: BLOCK.Button not found!"
             TweenService:Create(testBtnDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.DANGER}):Play()
             TweenService:Create(testBtn,    TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.DANGER}):Play()
             task.delay(2, function()
-                testBtnDesc.Text = "Clica 1x no Button para testar"
+                testBtnDesc.Text = "Click the Button once to test"
                 TweenService:Create(testBtnDesc, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
                 TweenService:Create(testBtn,    TweenInfo.new(0.3), {BackgroundColor3 = CONFIG.ACCENT_COLOR}):Play()
             end)
             return
         end
         if not btn:IsA("ImageButton") then
-            testBtnDesc.Text = "❌ Erro: BLOCK.Button não é ImageButton!"
+            testBtnDesc.Text = "❌ Error: BLOCK.Button is not an ImageButton!"
             TweenService:Create(testBtnDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.DANGER}):Play()
             TweenService:Create(testBtn,    TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.DANGER}):Play()
             task.delay(2, function()
-                testBtnDesc.Text = "Clica 1x no Button para testar"
+                testBtnDesc.Text = "Click the Button once to test"
                 TweenService:Create(testBtnDesc, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
                 TweenService:Create(testBtn,    TweenInfo.new(0.3), {BackgroundColor3 = CONFIG.ACCENT_COLOR}):Play()
             end)
@@ -1785,16 +2020,16 @@ testBtn.MouseButton1Click:Connect(function()
     end)
 
     if fireOk then
-        testBtnDesc.Text = "✔ Clique enviado com sucesso!"
+        testBtnDesc.Text = "✔ Click sent successfully!"
         TweenService:Create(testBtnDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.SUCCESS}):Play()
         TweenService:Create(testBtn,    TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.SUCCESS}):Play()
     else
-        testBtnDesc.Text = "❌ Erro ao clicar no Button"
+        testBtnDesc.Text = "❌ Error clicking Button"
         TweenService:Create(testBtnDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.DANGER}):Play()
         TweenService:Create(testBtn,    TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.DANGER}):Play()
     end
     task.delay(2, function()
-        testBtnDesc.Text = "Clica 1x no Button para testar"
+        testBtnDesc.Text = "Click the Button once to test"
         TweenService:Create(testBtnDesc, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
         TweenService:Create(testBtn,    TweenInfo.new(0.3), {BackgroundColor3 = CONFIG.ACCENT_COLOR}):Play()
     end)
@@ -1835,7 +2070,7 @@ do
     pdValueLabel.ZIndex = 4
 
     local pdDesc = Instance.new("TextLabel", pdContainer)
-    pdDesc.Text = "Raio base do detector de parry"
+    pdDesc.Text = "Base radius of the parry detector"
     pdDesc.Size = UDim2.new(1, -28, 0, 14)
     pdDesc.Position = UDim2.new(0, 14, 0, 26)
     pdDesc.BackgroundTransparency = 1
@@ -1899,7 +2134,7 @@ end
 
 createSeparator(CombatPage)
 
-createToggle(CombatPage, "Optimizer", "Limpa remote events antigos após cada disparo", function(on)
+createToggle(CombatPage, "Optimizer", "Clears old remote events after each fire", function(on)
     State.optimizer = on
 end)
 LocalPlayer.CharacterRemoving:Connect(function()
@@ -1915,26 +2150,515 @@ LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(0.5)
 
     if State.autoParry then
-        -- Reseta variáveis e reinicia o sistema completo
+        -- Reset variables and restart the full system
         State.hasExecutedThisDetection = false
         State.lastBallColor            = nil
         State.ballWasInside            = false
         lastBallCFrame                 = nil
         trackedSpeed                   = 0
-        -- Derruba conexão antiga e reinicia
+        -- Drop old connection and restart
         if State.runConnection then State.runConnection:Disconnect(); State.runConnection = nil end
         startAutoParry()
     end
 
     if State.autoSpam then
-        -- Derruba conexão antiga e reinicia
+        -- Drop old connection and restart
         if State.spamConnection then State.spamConnection:Disconnect(); State.spamConnection = nil end
         startAutoSpam()
     end
 end)
 
 -- ══════════════════════════════════════════
---         TAB VISUAL
+--    DEATH SOUND TAB (Anime Ball only)
+-- ══════════════════════════════════════════
+if DETECTED_GAME == "anime" then
+    local DeathPage = createTab("Sound", "🔊")
+
+    local deathHeader = Instance.new("TextLabel", DeathPage)
+    deathHeader.Text                  = "DEATH SOUND"
+    deathHeader.Size                  = UDim2.new(1, 0, 0, 18)
+    deathHeader.BackgroundTransparency = 1
+    deathHeader.TextColor3            = CONFIG.ACCENT_COLOR
+    deathHeader.TextSize              = 10
+    deathHeader.Font                  = Enum.Font.GothamBold
+    deathHeader.TextXAlignment        = Enum.TextXAlignment.Left
+    deathHeader.ZIndex                = 3
+
+    createSeparator(DeathPage)
+
+    -- ── JSON save system ──────────────────
+    local SAVE_FOLDER = "NEXUS - sounds"
+    local SAVE_FILE   = SAVE_FOLDER .. "/sounds.json"
+    local savedSounds = {}  -- { {id="123", label="123"}, ... }
+
+    local function ensureFolder()
+        if not isfolder(SAVE_FOLDER) then
+            makefolder(SAVE_FOLDER)
+        end
+    end
+
+    local function loadSounds()
+        ensureFolder()
+        if isfile(SAVE_FILE) then
+            local ok, data = pcall(function()
+                return game:GetService("HttpService"):JSONDecode(readfile(SAVE_FILE))
+            end)
+            if ok and type(data) == "table" then
+                savedSounds = data
+            end
+        end
+    end
+
+    local function saveSounds()
+        ensureFolder()
+        local ok, encoded = pcall(function()
+            return game:GetService("HttpService"):JSONEncode(savedSounds)
+        end)
+        if ok then
+            writefile(SAVE_FILE, encoded)
+        end
+    end
+
+    local function idExists(id)
+        for _, entry in ipairs(savedSounds) do
+            if entry.id == id then return true end
+        end
+        return false
+    end
+
+    -- Load saved sounds on startup
+    pcall(loadSounds)
+
+    -- ── Function to apply sound ─────────────
+    local function applySound(id)
+        return pcall(function()
+            local sound = game:GetService("ReplicatedStorage")
+                :WaitForChild("Storage")
+                :WaitForChild("Sounds")
+                :WaitForChild("Explosions")
+                :WaitForChild("Death")
+            sound.SoundId = "rbxassetid://" .. id
+        end)
+    end
+
+    -- ── Scrollable dropdown ───────────────
+    local ddContainer = Instance.new("Frame", DeathPage)
+    ddContainer.Size             = UDim2.new(1, 0, 0, 54)
+    ddContainer.BackgroundColor3 = CONFIG.BG_PANEL
+    ddContainer.BorderSizePixel  = 0
+    ddContainer.ZIndex           = 10
+    Instance.new("UICorner", ddContainer).CornerRadius = UDim.new(0, 10)
+    local ddStroke = Instance.new("UIStroke", ddContainer)
+    ddStroke.Color = CONFIG.BORDER_COLOR; ddStroke.Thickness = 1
+
+    local ddLabel = Instance.new("TextLabel", ddContainer)
+    ddLabel.Text = "Saved Sounds"
+    ddLabel.Size = UDim2.new(1, -14, 0, 16)
+    ddLabel.Position = UDim2.new(0, 14, 0, 6)
+    ddLabel.BackgroundTransparency = 1
+    ddLabel.TextColor3 = CONFIG.TEXT_SECONDARY
+    ddLabel.TextSize = 10; ddLabel.Font = Enum.Font.Gotham
+    ddLabel.TextXAlignment = Enum.TextXAlignment.Left
+    ddLabel.ZIndex = 11
+
+    local ddBtn = Instance.new("TextButton", ddContainer)
+    ddBtn.Size             = UDim2.new(1, -28, 0, 24)
+    ddBtn.Position         = UDim2.new(0, 14, 0, 24)
+    ddBtn.BackgroundColor3 = CONFIG.BG_MID
+    ddBtn.BorderSizePixel  = 0
+    ddBtn.TextColor3       = CONFIG.TEXT_PRIMARY
+    ddBtn.TextSize         = 11
+    ddBtn.Font             = Enum.Font.GothamSemibold
+    ddBtn.Text             = "Select saved sound..."
+    ddBtn.TextXAlignment   = Enum.TextXAlignment.Left
+    ddBtn.ZIndex           = 11
+    Instance.new("UICorner", ddBtn).CornerRadius = UDim.new(0, 6)
+    local ddBtnStroke = Instance.new("UIStroke", ddBtn)
+    ddBtnStroke.Color = CONFIG.BORDER_COLOR; ddBtnStroke.Thickness = 1
+    local ddBtnPad = Instance.new("UIPadding", ddBtn)
+    ddBtnPad.PaddingLeft = UDim.new(0, 8)
+
+    local ddArrow = Instance.new("TextLabel", ddBtn)
+    ddArrow.Text = "▾"
+    ddArrow.Size = UDim2.new(0, 20, 1, 0)
+    ddArrow.Position = UDim2.new(1, -24, 0, 0)
+    ddArrow.BackgroundTransparency = 1
+    ddArrow.TextColor3 = CONFIG.TEXT_SECONDARY
+    ddArrow.TextSize = 12; ddArrow.Font = Enum.Font.GothamBold
+    ddArrow.ZIndex = 12
+
+    -- Dropdown menu with ScrollingFrame
+    local ddMenu = Instance.new("Frame", ScreenGui)
+    ddMenu.Size             = UDim2.new(0, 0, 0, 0)
+    ddMenu.BackgroundColor3 = CONFIG.BG_MID
+    ddMenu.BorderSizePixel  = 0
+    ddMenu.Visible          = false
+    ddMenu.ZIndex           = 200
+    Instance.new("UICorner", ddMenu).CornerRadius = UDim.new(0, 8)
+    local ddMenuStroke = Instance.new("UIStroke", ddMenu)
+    ddMenuStroke.Color = CONFIG.ACCENT_COLOR; ddMenuStroke.Thickness = 1
+
+    -- Inner ScrollingFrame
+    local ddScroll = Instance.new("ScrollingFrame", ddMenu)
+    ddScroll.Size                = UDim2.new(1, -8, 1, -8)
+    ddScroll.Position            = UDim2.new(0, 4, 0, 4)
+    ddScroll.BackgroundTransparency = 1
+    ddScroll.BorderSizePixel     = 0
+    ddScroll.ScrollBarThickness  = 3
+    ddScroll.ScrollBarImageColor3 = CONFIG.ACCENT_COLOR
+    ddScroll.ZIndex              = 201
+    ddScroll.CanvasSize          = UDim2.new(0, 0, 0, 0)
+
+    local ddScrollLayout = Instance.new("UIListLayout", ddScroll)
+    ddScrollLayout.FillDirection = Enum.FillDirection.Vertical
+    ddScrollLayout.Padding       = UDim.new(0, 2)
+
+    ddScrollLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        ddScroll.CanvasSize = UDim2.new(0, 0, 0, ddScrollLayout.AbsoluteContentSize.Y)
+    end)
+
+    local ddOpen = false
+    local DD_MAX_HEIGHT = 140  -- altura máxima do menu
+
+    local function rebuildDropdown()
+        -- Clear old items
+        for _, child in pairs(ddScroll:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+
+        if #savedSounds == 0 then
+            local empty = Instance.new("TextButton", ddScroll)
+            empty.Size             = UDim2.new(1, 0, 0, 28)
+            empty.BackgroundTransparency = 1
+            empty.BorderSizePixel  = 0
+            empty.TextColor3       = CONFIG.TEXT_SECONDARY
+            empty.TextSize         = 11
+            empty.Font             = Enum.Font.Gotham
+            empty.Text             = "No sounds saved yet"
+            empty.ZIndex           = 202
+            return
+        end
+
+        for i, entry in ipairs(savedSounds) do
+            local item = Instance.new("TextButton", ddScroll)
+            item.Size             = UDim2.new(1, 0, 0, 28)
+            item.BackgroundColor3 = CONFIG.BG_PANEL
+            item.BackgroundTransparency = 0.3
+            item.BorderSizePixel  = 0
+            item.TextColor3       = CONFIG.TEXT_PRIMARY
+            item.TextSize         = 11
+            item.Font             = Enum.Font.GothamSemibold
+            item.Text             = "🔊  " .. entry.id
+            item.TextXAlignment   = Enum.TextXAlignment.Left
+            item.ZIndex           = 202
+            Instance.new("UICorner", item).CornerRadius = UDim.new(0, 6)
+            local itemPad = Instance.new("UIPadding", item)
+            itemPad.PaddingLeft = UDim.new(0, 8)
+
+            item.MouseEnter:Connect(function()
+                TweenService:Create(item, TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.ACCENT_COLOR, BackgroundTransparency = 0.7}):Play()
+            end)
+            item.MouseLeave:Connect(function()
+                TweenService:Create(item, TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.BG_PANEL, BackgroundTransparency = 0.3}):Play()
+            end)
+
+            local capturedId = entry.id
+            item.MouseButton1Click:Connect(function()
+                ddBtn.Text = "🔊  " .. capturedId
+                applySound(capturedId)
+                -- Close menu
+                ddOpen = false
+                TweenService:Create(ddMenu, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {Size = UDim2.new(0, ddMenu.Size.X.Offset, 0, 0)}):Play()
+                task.delay(0.15, function() ddMenu.Visible = false end)
+                TweenService:Create(ddArrow, TweenInfo.new(0.15), {Rotation = 0}):Play()
+            end)
+        end
+    end
+
+    ddBtn.MouseButton1Click:Connect(function()
+        ddOpen = not ddOpen
+        if ddOpen then
+            rebuildDropdown()
+            local absPos  = ddBtn.AbsolutePosition
+            local absSize = ddBtn.AbsoluteSize
+            local menuW   = absSize.X + 28
+            local contentH = ddScrollLayout.AbsoluteContentSize.Y + 8
+            local menuH   = math.min(contentH, DD_MAX_HEIGHT)
+            ddMenu.Position = UDim2.new(0, absPos.X, 0, absPos.Y + absSize.Y + 4)
+            ddMenu.Size     = UDim2.new(0, menuW, 0, 0)
+            ddMenu.Visible  = true
+            TweenService:Create(ddMenu, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                {Size = UDim2.new(0, menuW, 0, menuH)}):Play()
+            TweenService:Create(ddArrow, TweenInfo.new(0.15), {Rotation = 180}):Play()
+        else
+            TweenService:Create(ddMenu, TweenInfo.new(0.15, Enum.EasingStyle.Quad),
+                {Size = UDim2.new(0, ddMenu.Size.X.Offset, 0, 0)}):Play()
+            task.delay(0.15, function() ddMenu.Visible = false end)
+            TweenService:Create(ddArrow, TweenInfo.new(0.15), {Rotation = 0}):Play()
+        end
+    end)
+
+    createSeparator(DeathPage)
+
+    -- ── Preset IDs dropdown ───────────────
+    local PRESET_SOUNDS = {
+        {id = "72298953503422",  label = "72298953503422"},
+        {id = "83498632148661",  label = "83498632148661"},
+        {id = "18735403020",     label = "18735403020"},
+        {id = "18420707371",     label = "18420707371"},
+        {id = "1107208252",      label = "1107208252"},
+        {id = "8243331779",      label = "8243331779"},
+    }
+
+    local presetContainer = Instance.new("Frame", DeathPage)
+    presetContainer.Size             = UDim2.new(1, 0, 0, 54)
+    presetContainer.BackgroundColor3 = CONFIG.BG_PANEL
+    presetContainer.BorderSizePixel  = 0
+    presetContainer.ZIndex           = 9
+    Instance.new("UICorner", presetContainer).CornerRadius = UDim.new(0, 10)
+    local presetStroke = Instance.new("UIStroke", presetContainer)
+    presetStroke.Color = CONFIG.BORDER_COLOR; presetStroke.Thickness = 1
+
+    local presetLabel = Instance.new("TextLabel", presetContainer)
+    presetLabel.Text = "Preset Sounds"
+    presetLabel.Size = UDim2.new(1, -14, 0, 16)
+    presetLabel.Position = UDim2.new(0, 14, 0, 6)
+    presetLabel.BackgroundTransparency = 1
+    presetLabel.TextColor3 = CONFIG.TEXT_SECONDARY
+    presetLabel.TextSize = 10; presetLabel.Font = Enum.Font.Gotham
+    presetLabel.TextXAlignment = Enum.TextXAlignment.Left
+    presetLabel.ZIndex = 10
+
+    local presetBtn = Instance.new("TextButton", presetContainer)
+    presetBtn.Size             = UDim2.new(1, -28, 0, 24)
+    presetBtn.Position         = UDim2.new(0, 14, 0, 24)
+    presetBtn.BackgroundColor3 = CONFIG.BG_MID
+    presetBtn.BorderSizePixel  = 0
+    presetBtn.TextColor3       = CONFIG.TEXT_PRIMARY
+    presetBtn.TextSize         = 11
+    presetBtn.Font             = Enum.Font.GothamSemibold
+    presetBtn.Text             = "Choose a preset sound..."
+    presetBtn.TextXAlignment   = Enum.TextXAlignment.Left
+    presetBtn.ZIndex           = 10
+    Instance.new("UICorner", presetBtn).CornerRadius = UDim.new(0, 6)
+    local presetBtnStroke = Instance.new("UIStroke", presetBtn)
+    presetBtnStroke.Color = CONFIG.BORDER_COLOR; presetBtnStroke.Thickness = 1
+    local presetBtnPad = Instance.new("UIPadding", presetBtn)
+    presetBtnPad.PaddingLeft = UDim.new(0, 8)
+
+    local presetArrow = Instance.new("TextLabel", presetBtn)
+    presetArrow.Text = "▾"
+    presetArrow.Size = UDim2.new(0, 20, 1, 0)
+    presetArrow.Position = UDim2.new(1, -24, 0, 0)
+    presetArrow.BackgroundTransparency = 1
+    presetArrow.TextColor3 = CONFIG.TEXT_SECONDARY
+    presetArrow.TextSize = 12; presetArrow.Font = Enum.Font.GothamBold
+    presetArrow.ZIndex = 11
+
+    -- Menu preset com ScrollingFrame
+    local presetMenu = Instance.new("Frame", ScreenGui)
+    presetMenu.Size             = UDim2.new(0, 0, 0, 0)
+    presetMenu.BackgroundColor3 = CONFIG.BG_MID
+    presetMenu.BorderSizePixel  = 0
+    presetMenu.Visible          = false
+    presetMenu.ZIndex           = 190
+    Instance.new("UICorner", presetMenu).CornerRadius = UDim.new(0, 8)
+    local presetMenuStroke = Instance.new("UIStroke", presetMenu)
+    presetMenuStroke.Color = CONFIG.ACCENT_COLOR; presetMenuStroke.Thickness = 1
+
+    local presetScroll = Instance.new("ScrollingFrame", presetMenu)
+    presetScroll.Size                = UDim2.new(1, -8, 1, -8)
+    presetScroll.Position            = UDim2.new(0, 4, 0, 4)
+    presetScroll.BackgroundTransparency = 1
+    presetScroll.BorderSizePixel     = 0
+    presetScroll.ScrollBarThickness  = 3
+    presetScroll.ScrollBarImageColor3 = CONFIG.ACCENT_COLOR
+    presetScroll.ZIndex              = 191
+
+    local presetLayout = Instance.new("UIListLayout", presetScroll)
+    presetLayout.FillDirection = Enum.FillDirection.Vertical
+    presetLayout.Padding       = UDim.new(0, 2)
+    presetLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        presetScroll.CanvasSize = UDim2.new(0, 0, 0, presetLayout.AbsoluteContentSize.Y)
+    end)
+
+    local presetOpen = false
+    local PRESET_MAX_HEIGHT = 140
+
+    -- Populate preset items
+    for _, entry in ipairs(PRESET_SOUNDS) do
+        local item = Instance.new("TextButton", presetScroll)
+        item.Size             = UDim2.new(1, 0, 0, 28)
+        item.BackgroundColor3 = CONFIG.BG_PANEL
+        item.BackgroundTransparency = 0.3
+        item.BorderSizePixel  = 0
+        item.TextColor3       = CONFIG.TEXT_PRIMARY
+        item.TextSize         = 11
+        item.Font             = Enum.Font.GothamSemibold
+        item.Text             = "🎵  " .. entry.label
+        item.TextXAlignment   = Enum.TextXAlignment.Left
+        item.ZIndex           = 192
+        Instance.new("UICorner", item).CornerRadius = UDim.new(0, 6)
+        local iPad = Instance.new("UIPadding", item)
+        iPad.PaddingLeft = UDim.new(0, 8)
+
+        item.MouseEnter:Connect(function()
+            TweenService:Create(item, TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.ACCENT_COLOR, BackgroundTransparency = 0.7}):Play()
+        end)
+        item.MouseLeave:Connect(function()
+            TweenService:Create(item, TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.BG_PANEL, BackgroundTransparency = 0.3}):Play()
+        end)
+
+        local capturedId = entry.id
+        item.MouseButton1Click:Connect(function()
+            presetBtn.Text = "🎵  " .. capturedId
+            applySound(capturedId)
+            presetOpen = false
+            TweenService:Create(presetMenu, TweenInfo.new(0.15, Enum.EasingStyle.Quad),
+                {Size = UDim2.new(0, presetMenu.Size.X.Offset, 0, 0)}):Play()
+            task.delay(0.15, function() presetMenu.Visible = false end)
+            TweenService:Create(presetArrow, TweenInfo.new(0.15), {Rotation = 0}):Play()
+        end)
+    end
+
+    presetBtn.MouseButton1Click:Connect(function()
+        presetOpen = not presetOpen
+        if presetOpen then
+            local absPos  = presetBtn.AbsolutePosition
+            local absSize = presetBtn.AbsoluteSize
+            local menuW   = absSize.X + 28
+            local contentH = presetLayout.AbsoluteContentSize.Y + 8
+            local menuH   = math.min(contentH, PRESET_MAX_HEIGHT)
+            presetMenu.Position = UDim2.new(0, absPos.X, 0, absPos.Y + absSize.Y + 4)
+            presetMenu.Size     = UDim2.new(0, menuW, 0, 0)
+            presetMenu.Visible  = true
+            TweenService:Create(presetMenu, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+                {Size = UDim2.new(0, menuW, 0, menuH)}):Play()
+            TweenService:Create(presetArrow, TweenInfo.new(0.15), {Rotation = 180}):Play()
+        else
+            TweenService:Create(presetMenu, TweenInfo.new(0.15, Enum.EasingStyle.Quad),
+                {Size = UDim2.new(0, presetMenu.Size.X.Offset, 0, 0)}):Play()
+            task.delay(0.15, function() presetMenu.Visible = false end)
+            TweenService:Create(presetArrow, TweenInfo.new(0.15), {Rotation = 0}):Play()
+        end
+    end)
+
+    createSeparator(DeathPage)
+
+    -- ── TextBox for new Sound ID ────────────
+    local soundContainer = Instance.new("Frame", DeathPage)
+    soundContainer.Size             = UDim2.new(1, 0, 0, 90)
+    soundContainer.BackgroundColor3 = CONFIG.BG_PANEL
+    soundContainer.BorderSizePixel  = 0
+    soundContainer.ZIndex           = 3
+    Instance.new("UICorner", soundContainer).CornerRadius = UDim.new(0, 10)
+    local soundStroke = Instance.new("UIStroke", soundContainer)
+    soundStroke.Color = CONFIG.BORDER_COLOR; soundStroke.Thickness = 1
+
+    local soundLabel = Instance.new("TextLabel", soundContainer)
+    soundLabel.Text                  = "New Sound ID"
+    soundLabel.Size                  = UDim2.new(1, -14, 0, 16)
+    soundLabel.Position              = UDim2.new(0, 14, 0, 8)
+    soundLabel.BackgroundTransparency = 1
+    soundLabel.TextColor3            = CONFIG.TEXT_SECONDARY
+    soundLabel.TextSize              = 10
+    soundLabel.Font                  = Enum.Font.Gotham
+    soundLabel.TextXAlignment        = Enum.TextXAlignment.Left
+    soundLabel.ZIndex                = 4
+
+    local soundDesc = Instance.new("TextLabel", soundContainer)
+    soundDesc.Text                  = "Enter the ID and press Enter to save"
+    soundDesc.Size                  = UDim2.new(1, -14, 0, 14)
+    soundDesc.Position              = UDim2.new(0, 14, 1, -18)
+    soundDesc.BackgroundTransparency = 1
+    soundDesc.TextColor3            = CONFIG.TEXT_SECONDARY
+    soundDesc.TextSize              = 10
+    soundDesc.Font                  = Enum.Font.Gotham
+    soundDesc.TextXAlignment        = Enum.TextXAlignment.Left
+    soundDesc.ZIndex                = 4
+
+    local soundBoxFrame = Instance.new("Frame", soundContainer)
+    soundBoxFrame.Size             = UDim2.new(1, -28, 0, 28)
+    soundBoxFrame.Position         = UDim2.new(0, 14, 0, 28)
+    soundBoxFrame.BackgroundColor3 = CONFIG.BG_MID
+    soundBoxFrame.BorderSizePixel  = 0
+    soundBoxFrame.ZIndex           = 4
+    Instance.new("UICorner", soundBoxFrame).CornerRadius = UDim.new(0, 7)
+    local soundBoxStroke = Instance.new("UIStroke", soundBoxFrame)
+    soundBoxStroke.Color = CONFIG.BORDER_COLOR; soundBoxStroke.Thickness = 1
+
+    local soundBox = Instance.new("TextBox", soundBoxFrame)
+    soundBox.Size                  = UDim2.new(1, -16, 1, 0)
+    soundBox.Position              = UDim2.new(0, 8, 0, 0)
+    soundBox.BackgroundTransparency = 1
+    soundBox.TextColor3            = CONFIG.TEXT_PRIMARY
+    soundBox.TextSize              = 12
+    soundBox.Font                  = Enum.Font.GothamSemibold
+    soundBox.PlaceholderText       = "Ex: 131070686"
+    soundBox.PlaceholderColor3     = CONFIG.TEXT_SECONDARY
+    soundBox.Text                  = ""
+    soundBox.ClearTextOnFocus      = false
+    soundBox.ZIndex                = 5
+    local soundBoxPad = Instance.new("UIPadding", soundBox)
+    soundBoxPad.PaddingLeft = UDim.new(0, 2)
+
+    soundBox.Focused:Connect(function()
+        TweenService:Create(soundBoxStroke, TweenInfo.new(0.15), {Color = CONFIG.ACCENT_COLOR}):Play()
+    end)
+
+    soundBox.FocusLost:Connect(function(enterPressed)
+        TweenService:Create(soundBoxStroke, TweenInfo.new(0.15), {Color = CONFIG.BORDER_COLOR}):Play()
+        if not enterPressed or soundBox.Text == "" then return end
+
+        local inputId = soundBox.Text:match("%d+")
+        if not inputId then
+            soundDesc.Text = "❌  Invalid ID — numbers only"
+            TweenService:Create(soundDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.DANGER}):Play()
+            TweenService:Create(soundBoxStroke, TweenInfo.new(0.1), {Color = CONFIG.DANGER}):Play()
+            task.delay(2.5, function()
+                soundDesc.Text = "Enter the ID and press Enter to save"
+                TweenService:Create(soundDesc, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
+                TweenService:Create(soundBoxStroke, TweenInfo.new(0.3), {Color = CONFIG.BORDER_COLOR}):Play()
+            end)
+            return
+        end
+
+        -- Apply sound
+        local ok = applySound(inputId)
+
+        if ok then
+            -- Save to JSON if it does not exist yet
+            if not idExists(inputId) then
+                table.insert(savedSounds, {id = inputId})
+                pcall(saveSounds)
+                ddBtn.Text = "🔊  " .. inputId
+            end
+
+            soundDesc.Text = "✔  ID " .. inputId .. " applied and saved!"
+            TweenService:Create(soundDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.SUCCESS}):Play()
+            TweenService:Create(soundBoxStroke, TweenInfo.new(0.1), {Color = CONFIG.SUCCESS}):Play()
+        else
+            soundDesc.Text = "❌  Error: Sound not found"
+            TweenService:Create(soundDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.DANGER}):Play()
+            TweenService:Create(soundBoxStroke, TweenInfo.new(0.1), {Color = CONFIG.DANGER}):Play()
+        end
+
+        task.delay(2.5, function()
+            soundDesc.Text = "Enter the ID and press Enter to save"
+            TweenService:Create(soundDesc, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
+            TweenService:Create(soundBoxStroke, TweenInfo.new(0.3), {Color = CONFIG.BORDER_COLOR}):Play()
+        end)
+    end)
+
+    -- Update dropdown with saved sounds on load
+    rebuildDropdown()
+    if #savedSounds > 0 then
+        ddBtn.Text = "🔊  " .. savedSounds[#savedSounds].id
+    end
+end
+
+-- ══════════════════════════════════════════
+--         VISUAL TAB
 -- ══════════════════════════════════════════
 local VisualPage = createTab("Visual", "👁")
 
@@ -1951,7 +2675,7 @@ visualHeader.ZIndex                = 3
 createSeparator(VisualPage)
 
 -- ══════════════════════════════════════════
---    TAB SKILLS (Phantom Ball apenas)
+--    SKILLS TAB (Phantom Ball only)
 -- ══════════════════════════════════════════
 if DETECTED_GAME == "phantom" then
     local SkillsPage = createTab("Skills", "⚡")
@@ -1968,7 +2692,7 @@ if DETECTED_GAME == "phantom" then
 
     createSeparator(SkillsPage)
 
-    -- Container do passivo
+    -- Passive container
     local passiveContainer = Instance.new("Frame", SkillsPage)
     passiveContainer.Size             = UDim2.new(1, 0, 0, 90)
     passiveContainer.BackgroundColor3 = CONFIG.BG_PANEL
@@ -1979,7 +2703,7 @@ if DETECTED_GAME == "phantom" then
     passiveStroke.Color = CONFIG.BORDER_COLOR; passiveStroke.Thickness = 1
 
     local passiveLabel = Instance.new("TextLabel", passiveContainer)
-    passiveLabel.Text                  = "Passivo"
+    passiveLabel.Text                  = "Passive"
     passiveLabel.Size                  = UDim2.new(1, -14, 0, 16)
     passiveLabel.Position              = UDim2.new(0, 14, 0, 8)
     passiveLabel.BackgroundTransparency = 1
@@ -1990,7 +2714,7 @@ if DETECTED_GAME == "phantom" then
     passiveLabel.ZIndex                = 4
 
     local passiveDesc = Instance.new("TextLabel", passiveContainer)
-    passiveDesc.Text                  = "Digite o nome e pressione Enter"
+    passiveDesc.Text                  = "Enter the name and press Enter"
     passiveDesc.Size                  = UDim2.new(1, -14, 0, 14)
     passiveDesc.Position              = UDim2.new(0, 14, 1, -18)
     passiveDesc.BackgroundTransparency = 1
@@ -2000,7 +2724,7 @@ if DETECTED_GAME == "phantom" then
     passiveDesc.TextXAlignment        = Enum.TextXAlignment.Left
     passiveDesc.ZIndex                = 4
 
-    -- TextBox do passivo
+    -- Passive TextBox
     local passiveBoxFrame = Instance.new("Frame", passiveContainer)
     passiveBoxFrame.Size             = UDim2.new(1, -28, 0, 28)
     passiveBoxFrame.Position         = UDim2.new(0, 14, 0, 28)
@@ -2018,7 +2742,7 @@ if DETECTED_GAME == "phantom" then
     passiveBox.TextColor3            = CONFIG.TEXT_PRIMARY
     passiveBox.TextSize              = 12
     passiveBox.Font                  = Enum.Font.GothamSemibold
-    passiveBox.PlaceholderText       = "Ex: Reflexos, Força..."
+    passiveBox.PlaceholderText       = "Ex: Reflexes, Strength..."
     passiveBox.PlaceholderColor3     = CONFIG.TEXT_SECONDARY
     passiveBox.Text                  = ""
     passiveBox.ClearTextOnFocus      = false
@@ -2050,20 +2774,20 @@ if DETECTED_GAME == "phantom" then
             TweenService:Create(passiveDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.SUCCESS}):Play()
             TweenService:Create(passiveBoxStroke, TweenInfo.new(0.1), {Color = CONFIG.SUCCESS}):Play()
         else
-            passiveDesc.Text = "❌  Erro ao equipar passivo"
+            passiveDesc.Text = "❌  Error equipping passive"
             TweenService:Create(passiveDesc, TweenInfo.new(0.1), {TextColor3 = CONFIG.DANGER}):Play()
             TweenService:Create(passiveBoxStroke, TweenInfo.new(0.1), {Color = CONFIG.DANGER}):Play()
         end
 
         task.delay(2.5, function()
-            passiveDesc.Text = "Digite o nome e pressione Enter"
+            passiveDesc.Text = "Enter the name and press Enter"
             TweenService:Create(passiveDesc, TweenInfo.new(0.3), {TextColor3 = CONFIG.TEXT_SECONDARY}):Play()
             TweenService:Create(passiveBoxStroke, TweenInfo.new(0.3), {Color = CONFIG.BORDER_COLOR}):Play()
         end)
     end)
 end
 
-createToggle(VisualPage, "Show Detectors", "Exibe as esferas dos detectores no mundo", function(on)
+createToggle(VisualPage, "Show Detectors", "Shows detector spheres in the world", function(on)
     State.showDetectors = on
     if State.detectorPart     then State.detectorPart.Transparency     = on and 0.6 or 1 end
     if State.spamDetectorPart then State.spamDetectorPart.Transparency = on and 0.6 or 1 end
@@ -2071,7 +2795,7 @@ end)
 
 createSeparator(VisualPage)
 
--- No Anime Ball, a página Visual mostra só os stats panels
+-- In Anime Ball, the Visual page only shows the stats panels
 if DETECTED_GAME == "anime" then
     local animeVisualInfo = Instance.new("TextLabel", VisualPage)
     animeVisualInfo.Text                  = "ANIME BALL  ·  Stats Panels"
@@ -2124,7 +2848,7 @@ psAccent.Size = UDim2.new(0.45,0,0,2); psAccent.Position = UDim2.new(0,10,1,-2)
 psAccent.BackgroundColor3 = CONFIG.ACCENT_COLOR; psAccent.BorderSizePixel = 0
 Instance.new("UICorner", psAccent).CornerRadius = UDim.new(1,0)
 
--- Glow no fundo da parry stats frame
+-- Glow on parry stats frame background
 local psGlow = Instance.new("Frame", ParryStatsFrame)
 psGlow.Size = UDim2.new(1,0,1,0); psGlow.BackgroundTransparency = 1; psGlow.ZIndex = 0
 local psGlowGrad = Instance.new("UIGradient", psGlow)
@@ -2150,8 +2874,8 @@ local function makeStat(parent, yPos, label)
 end
 
 local psStatStatus = makeStat(ParryStatsFrame, 42,  "Status")
-local psStatRadius = makeStat(ParryStatsFrame, 63,  "Raio Atual")
-local psStatVel    = makeStat(ParryStatsFrame, 84,  "Vel. Bola")
+local psStatRadius = makeStat(ParryStatsFrame, 63,  "Current Radius")
+local psStatVel    = makeStat(ParryStatsFrame, 84,  "Ball Speed")
 local psStatCount  = makeStat(ParryStatsFrame, 105, "Total Parrys")
 
 makeDraggable(ParryStatsFrame, psHeader)
@@ -2209,7 +2933,7 @@ local ssStatCount  = makeStat(SpamStatsFrame, 105, "Total Fires")
 
 makeDraggable(SpamStatsFrame, ssHeader)
 
--- ── Loop de atualização dos stats ─────────
+-- ── Stats update loop ─────────
 RunService.RenderStepped:Connect(function()
     if State.showParryStats then
         if State.autoParry then
@@ -2219,13 +2943,13 @@ RunService.RenderStepped:Connect(function()
             else
                 curRadius = math.clamp(CONFIG.PARRY_DIST + math.floor(trackedSpeed / 5), CONFIG.PARRY_DIST, 300)
             end
-            psStatStatus.Text = State.hasExecutedThisDetection and "🔴 Executado" or "🟢 Monitorando"
+            psStatStatus.Text = State.hasExecutedThisDetection and "🔴 Executed" or "🟢 Monitoring"
             psStatRadius.Text = string.format("%.1f st", curRadius)
             psStatVel.Text    = DETECTED_GAME == "anime"
                 and string.format("%.1f s/s", State.animeTrackedSpeed)
                 or  string.format("%.1f s/s", trackedSpeed)
         else
-            psStatStatus.Text = "⚫ Inativo"
+            psStatStatus.Text = "⚫ Inactive"
             psStatRadius.Text = "—"
             psStatVel.Text    = "—"
         end
@@ -2233,25 +2957,25 @@ RunService.RenderStepped:Connect(function()
     end
 
     if State.showSpamStats then
-        ssStatStatus.Text = State.spamActive and "🔴 Spamando" or (State.autoSpam and "🟡 Aguardando" or "⚫ Inativo")
+        ssStatStatus.Text = State.spamActive and "🔴 Spamming" or (State.autoSpam and "🟡 Waiting" or "⚫ Inactive")
         ssStatMult.Text   = "x" .. tostring(State.spamMultiplier)
         ssStatCount.Text  = tostring(State.spamCount)
-        ssStatTarget.Text = State.savedSpamTarget or "Nenhum"
+        ssStatTarget.Text = State.savedSpamTarget or "None"
     end
 end)
 
--- Toggles na tab Visual
-createToggle(VisualPage, "Show Parry Stats", "Exibe painel de stats do Auto Parry", function(on)
+-- Toggles in the Visual tab
+createToggle(VisualPage, "Show Parry Stats", "Shows Auto Parry stats panel", function(on)
     State.showParryStats  = on
     ParryStatsGui.Enabled = on
 end)
 
-createToggle(VisualPage, "Show Spam Stats", "Exibe painel de stats do Auto Spam", function(on)
+createToggle(VisualPage, "Show Spam Stats", "Shows Auto Spam stats panel", function(on)
     State.showSpamStats  = on
     SpamStatsGui.Enabled = on
 end)
 
--- Anime Ball: ativa automaticamente os dois stats panels ao carregar
+-- Anime Ball: auto-activates both stats panels on load
 if DETECTED_GAME == "anime" then
     State.showParryStats  = true
     State.showSpamStats   = true
@@ -2260,10 +2984,10 @@ if DETECTED_GAME == "anime" then
 end
 
 -- ══════════════════════════════════════════
---         EFEITOS VISUAIS
+--         VISUAL EFFECTS
 -- ══════════════════════════════════════════
 
--- Partículas
+-- Particles
 local particleContainer = Instance.new("Frame", MainFrame)
 particleContainer.Size                   = UDim2.new(1, 0, 1, 0)
 particleContainer.BackgroundTransparency = 1
@@ -2320,7 +3044,502 @@ task.spawn(function()
 end)
 
 -- ══════════════════════════════════════════
---         INICIALIZAÇÃO
+--         SETTINGS TAB
+-- ══════════════════════════════════════════
+local ConfigPage = createTab("Config", "⚙")
+
+local configHeader = Instance.new("TextLabel", ConfigPage)
+configHeader.Text                  = "SETTINGS"
+configHeader.Size                  = UDim2.new(1, 0, 0, 18)
+configHeader.BackgroundTransparency = 1
+configHeader.TextColor3            = CONFIG.ACCENT_COLOR
+configHeader.TextSize              = 10
+configHeader.Font                  = Enum.Font.GothamBold
+configHeader.TextXAlignment        = Enum.TextXAlignment.Left
+configHeader.ZIndex                = 3
+
+createSeparator(ConfigPage)
+
+-- ── THEME SYSTEM ──────────────────────
+local THEMES = {
+    {
+        name    = "Black & White",
+        accent  = Color3.fromRGB(220, 220, 220),
+        glow    = Color3.fromRGB(255, 255, 255),
+        bgDark  = Color3.fromRGB(8,   8,   8),
+        bgMid   = Color3.fromRGB(18,  18,  18),
+        bgPanel = Color3.fromRGB(26,  26,  26),
+        border  = Color3.fromRGB(55,  55,  55),
+        toggleOn = Color3.fromRGB(200, 200, 200),
+    },
+    {
+        name    = "Neon Purple",
+        accent  = Color3.fromRGB(99,  102, 241),
+        glow    = Color3.fromRGB(139, 92,  246),
+        bgDark  = Color3.fromRGB(10,  10,  18),
+        bgMid   = Color3.fromRGB(16,  16,  28),
+        bgPanel = Color3.fromRGB(20,  20,  36),
+        border  = Color3.fromRGB(40,  40,  70),
+        toggleOn = Color3.fromRGB(99, 102, 241),
+    },
+    {
+        name    = "Cyber Red",
+        accent  = Color3.fromRGB(239, 68,  68),
+        glow    = Color3.fromRGB(255, 120, 80),
+        bgDark  = Color3.fromRGB(12,  8,   8),
+        bgMid   = Color3.fromRGB(22,  12,  12),
+        bgPanel = Color3.fromRGB(30,  15,  15),
+        border  = Color3.fromRGB(70,  25,  25),
+        toggleOn = Color3.fromRGB(239, 68,  68),
+    },
+    {
+        name    = "Ocean Blue",
+        accent  = Color3.fromRGB(56,  189, 248),
+        glow    = Color3.fromRGB(99,  220, 255),
+        bgDark  = Color3.fromRGB(4,   12,  20),
+        bgMid   = Color3.fromRGB(8,   20,  36),
+        bgPanel = Color3.fromRGB(12,  28,  48),
+        border  = Color3.fromRGB(20,  60,  90),
+        toggleOn = Color3.fromRGB(56, 189, 248),
+    },
+    {
+        name    = "Matrix Green",
+        accent  = Color3.fromRGB(34,  197, 94),
+        glow    = Color3.fromRGB(74,  255, 128),
+        bgDark  = Color3.fromRGB(4,   12,  6),
+        bgMid   = Color3.fromRGB(8,   20,  10),
+        bgPanel = Color3.fromRGB(10,  28,  14),
+        border  = Color3.fromRGB(20,  60,  30),
+        toggleOn = Color3.fromRGB(34, 197, 94),
+    },
+}
+
+local currentThemeIndex = 1 -- Black & White default
+
+-- Stores the previous theme to know which colors to replace
+local previousTheme = nil
+
+local function colorsEqual(a, b)
+    return math.abs(a.R - b.R) < 0.01 and
+           math.abs(a.G - b.G) < 0.01 and
+           math.abs(a.B - b.B) < 0.01
+end
+
+local function remapColor(color, old, new)
+    -- Returns the matching new color if current color matches old theme
+    if colorsEqual(color, old.accent)  then return new.accent  end
+    if colorsEqual(color, old.glow)    then return new.glow    end
+    if colorsEqual(color, old.bgDark)  then return new.bgDark  end
+    if colorsEqual(color, old.bgMid)   then return new.bgMid   end
+    if colorsEqual(color, old.bgPanel) then return new.bgPanel end
+    if colorsEqual(color, old.border)  then return new.border  end
+    if colorsEqual(color, old.toggleOn) then return new.toggleOn end
+    -- TOGGLE_OFF is always the same across all themes
+    return nil
+end
+
+local function applyTheme(t)
+    local old = previousTheme or {
+        accent   = Color3.fromRGB(220, 220, 220),
+        glow     = Color3.fromRGB(255, 255, 255),
+        bgDark   = Color3.fromRGB(8,   8,   8),
+        bgMid    = Color3.fromRGB(18,  18,  18),
+        bgPanel  = Color3.fromRGB(26,  26,  26),
+        border   = Color3.fromRGB(55,  55,  55),
+        toggleOn = Color3.fromRGB(200, 200, 200),
+    }
+    previousTheme = t
+
+    CONFIG.ACCENT_COLOR  = t.accent
+    CONFIG.ACCENT_GLOW   = t.glow
+    CONFIG.BG_DARK       = t.bgDark
+    CONFIG.BG_MID        = t.bgMid
+    CONFIG.BG_PANEL      = t.bgPanel
+    CONFIG.BORDER_COLOR  = t.border
+    CONFIG.TOGGLE_ON     = t.toggleOn
+
+    local tweenInfo = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+    -- ── Full scan of all MainFrame descendants ──
+    local function scanAndUpdate(root)
+        for _, obj in ipairs(root:GetDescendants()) do
+            -- Frames and buttons: BackgroundColor3
+            if obj:IsA("Frame") or obj:IsA("TextButton") or obj:IsA("ScrollingFrame") then
+                local newBg = remapColor(obj.BackgroundColor3, old, t)
+                if newBg then
+                    TweenService:Create(obj, tweenInfo, {BackgroundColor3 = newBg}):Play()
+                end
+                -- ScrollingFrame: scrollbar color
+                if obj:IsA("ScrollingFrame") then
+                    if colorsEqual(obj.ScrollBarImageColor3, old.accent) then
+                        obj.ScrollBarImageColor3 = t.accent
+                    end
+                end
+            end
+            -- TextLabels and TextBoxes: TextColor3
+            if obj:IsA("TextLabel") or obj:IsA("TextBox") or obj:IsA("TextButton") then
+                local newTxt = remapColor(obj.TextColor3, old, t)
+                if newTxt then
+                    TweenService:Create(obj, tweenInfo, {TextColor3 = newTxt}):Play()
+                end
+            end
+            -- UIStroke: Color
+            if obj:IsA("UIStroke") then
+                local newStroke = remapColor(obj.Color, old, t)
+                if newStroke then
+                    TweenService:Create(obj, tweenInfo, {Color = newStroke}):Play()
+                end
+            end
+        end
+    end
+
+    scanAndUpdate(MainFrame)
+
+    -- Also updates floating menus in ScreenGui (dropdowns)
+    for _, obj in ipairs(ScreenGui:GetDescendants()) do
+        if obj:IsA("Frame") or obj:IsA("TextButton") then
+            local newBg = remapColor(obj.BackgroundColor3, old, t)
+            if newBg then
+                TweenService:Create(obj, tweenInfo, {BackgroundColor3 = newBg}):Play()
+            end
+        end
+        if obj:IsA("TextLabel") or obj:IsA("TextButton") then
+            local newTxt = remapColor(obj.TextColor3, old, t)
+            if newTxt then
+                TweenService:Create(obj, tweenInfo, {TextColor3 = newTxt}):Play()
+            end
+        end
+        if obj:IsA("UIStroke") then
+            local newStroke = remapColor(obj.Color, old, t)
+            if newStroke then
+                TweenService:Create(obj, tweenInfo, {Color = newStroke}):Play()
+            end
+        end
+        if obj:IsA("ScrollingFrame") and colorsEqual(obj.ScrollBarImageColor3, old.accent) then
+            obj.ScrollBarImageColor3 = t.accent
+        end
+    end
+
+    -- ── Gradients (UIGradient does not support Tween, update directly) ──
+    mainGradient.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0,    t.glow),
+        ColorSequenceKeypoint.new(0.35, t.accent),
+        ColorSequenceKeypoint.new(0.65, t.bgMid),
+        ColorSequenceKeypoint.new(1,    t.bgDark),
+    })
+
+    glowGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0,   t.accent),
+        ColorSequenceKeypoint.new(0.5, t.bgDark),
+        ColorSequenceKeypoint.new(1,   t.bgDark),
+    })
+
+    -- Title accentLine gradient
+    local accentLineGrad = accentLine:FindFirstChildOfClass("UIGradient")
+    if accentLineGrad then
+        accentLineGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, t.accent),
+            ColorSequenceKeypoint.new(1, t.glow),
+        })
+    end
+
+    -- ScanLine gradient
+    scanGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0,   Color3.fromRGB(0,0,0)),
+        ColorSequenceKeypoint.new(0.5, t.accent),
+        ColorSequenceKeypoint.new(1,   Color3.fromRGB(0,0,0)),
+    })
+
+    -- FloatBtn pulse (tween task already running, just fix base color)
+    TweenService:Create(FloatBtn, tweenInfo, {BackgroundColor3 = t.accent}):Play()
+
+    -- Re-aplica o estado da tab ativa para atualizar indicator e highlight
+    if State.currentTab then
+        selectTab(State.currentTab)
+    end
+end
+
+-- Apply default theme on start
+applyTheme(THEMES[currentThemeIndex])
+
+-- ── Themes Dropdown ─────────────────────
+local themeContainer = Instance.new("Frame", ConfigPage)
+themeContainer.Size             = UDim2.new(1, 0, 0, 60)
+themeContainer.BackgroundColor3 = CONFIG.BG_PANEL
+themeContainer.BorderSizePixel  = 0
+themeContainer.ZIndex           = 3
+Instance.new("UICorner", themeContainer).CornerRadius = UDim.new(0, 10)
+local themeStroke = Instance.new("UIStroke", themeContainer)
+themeStroke.Color     = CONFIG.BORDER_COLOR
+themeStroke.Thickness = 1
+
+local themeLabel = Instance.new("TextLabel", themeContainer)
+themeLabel.Text                  = "Interface Theme"
+themeLabel.Size                  = UDim2.new(1, -80, 0, 20)
+themeLabel.Position              = UDim2.new(0, 14, 0, 8)
+themeLabel.BackgroundTransparency = 1
+themeLabel.TextColor3            = CONFIG.TEXT_PRIMARY
+themeLabel.TextSize              = 13
+themeLabel.Font                  = Enum.Font.GothamSemibold
+themeLabel.TextXAlignment        = Enum.TextXAlignment.Left
+themeLabel.ZIndex                = 4
+
+local themeDesc = Instance.new("TextLabel", themeContainer)
+themeDesc.Text                  = "Customize the GUI colors"
+themeDesc.Size                  = UDim2.new(1, -80, 0, 14)
+themeDesc.Position              = UDim2.new(0, 14, 0, 30)
+themeDesc.BackgroundTransparency = 1
+themeDesc.TextColor3            = CONFIG.TEXT_SECONDARY
+themeDesc.TextSize              = 10
+themeDesc.Font                  = Enum.Font.Gotham
+themeDesc.TextXAlignment        = Enum.TextXAlignment.Left
+themeDesc.ZIndex                = 4
+
+-- Theme dropdown button
+local themeDdBtn = Instance.new("TextButton", themeContainer)
+themeDdBtn.Size             = UDim2.new(0, 130, 0, 28)
+themeDdBtn.Position         = UDim2.new(1, -142, 0.5, -14)
+themeDdBtn.BackgroundColor3 = CONFIG.BG_MID
+themeDdBtn.BorderSizePixel  = 0
+themeDdBtn.TextColor3       = CONFIG.TEXT_PRIMARY
+themeDdBtn.TextSize         = 11
+themeDdBtn.Font             = Enum.Font.GothamSemibold
+themeDdBtn.Text             = "⬛  Black & White"
+themeDdBtn.TextXAlignment   = Enum.TextXAlignment.Left
+themeDdBtn.ZIndex           = 10
+Instance.new("UICorner", themeDdBtn).CornerRadius = UDim.new(0, 7)
+local themeDdStroke = Instance.new("UIStroke", themeDdBtn)
+themeDdStroke.Color = CONFIG.BORDER_COLOR; themeDdStroke.Thickness = 1
+local themeDdPad = Instance.new("UIPadding", themeDdBtn)
+themeDdPad.PaddingLeft = UDim.new(0, 8)
+
+local themeDdArrow = Instance.new("TextLabel", themeDdBtn)
+themeDdArrow.Text                  = "▾"
+themeDdArrow.Size                  = UDim2.new(0, 18, 1, 0)
+themeDdArrow.Position              = UDim2.new(1, -20, 0, 0)
+themeDdArrow.BackgroundTransparency = 1
+themeDdArrow.TextColor3            = CONFIG.TEXT_SECONDARY
+themeDdArrow.TextSize              = 12
+themeDdArrow.Font                  = Enum.Font.GothamBold
+themeDdArrow.ZIndex                = 11
+
+-- Theme dropdown menu
+local themeDdMenu = Instance.new("Frame", ScreenGui)
+themeDdMenu.Size             = UDim2.new(0, 0, 0, 0)
+themeDdMenu.BackgroundColor3 = CONFIG.BG_MID
+themeDdMenu.BorderSizePixel  = 0
+themeDdMenu.Visible          = false
+themeDdMenu.ZIndex           = 200
+Instance.new("UICorner", themeDdMenu).CornerRadius = UDim.new(0, 8)
+local themeDdMenuStroke = Instance.new("UIStroke", themeDdMenu)
+themeDdMenuStroke.Color = CONFIG.ACCENT_COLOR; themeDdMenuStroke.Thickness = 1
+
+local themeDdScroll = Instance.new("ScrollingFrame", themeDdMenu)
+themeDdScroll.Size                = UDim2.new(1, -8, 1, -8)
+themeDdScroll.Position            = UDim2.new(0, 4, 0, 4)
+themeDdScroll.BackgroundTransparency = 1
+themeDdScroll.BorderSizePixel     = 0
+themeDdScroll.ScrollBarThickness  = 3
+themeDdScroll.ScrollBarImageColor3 = CONFIG.ACCENT_COLOR
+themeDdScroll.ZIndex              = 201
+
+local themeDdLayout = Instance.new("UIListLayout", themeDdScroll)
+themeDdLayout.FillDirection = Enum.FillDirection.Vertical
+themeDdLayout.Padding       = UDim.new(0, 2)
+themeDdLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    themeDdScroll.CanvasSize = UDim2.new(0, 0, 0, themeDdLayout.AbsoluteContentSize.Y)
+end)
+
+local themeIcons = {"⬛", "💜", "🔴", "🔵", "🟢"}
+local themeDdOpen = false
+
+local function closethemeDd()
+    themeDdOpen = false
+    TweenService:Create(themeDdMenu, TweenInfo.new(0.15, Enum.EasingStyle.Quad),
+        {Size = UDim2.new(0, themeDdMenu.Size.X.Offset, 0, 0)}):Play()
+    task.delay(0.15, function() themeDdMenu.Visible = false end)
+    TweenService:Create(themeDdArrow, TweenInfo.new(0.15), {Rotation = 0}):Play()
+end
+
+for i, theme in ipairs(THEMES) do
+    local item = Instance.new("TextButton", themeDdScroll)
+    item.Size             = UDim2.new(1, 0, 0, 30)
+    item.BackgroundColor3 = CONFIG.BG_PANEL
+    item.BackgroundTransparency = 0.3
+    item.BorderSizePixel  = 0
+    item.TextColor3       = CONFIG.TEXT_PRIMARY
+    item.TextSize         = 11
+    item.Font             = Enum.Font.GothamSemibold
+    item.Text             = themeIcons[i] .. "  " .. theme.name
+    item.TextXAlignment   = Enum.TextXAlignment.Left
+    item.ZIndex           = 202
+    Instance.new("UICorner", item).CornerRadius = UDim.new(0, 6)
+    local iPad = Instance.new("UIPadding", item)
+    iPad.PaddingLeft = UDim.new(0, 8)
+
+    -- Color indicator bar
+    local colorBar = Instance.new("Frame", item)
+    colorBar.Size             = UDim2.new(0, 3, 0.6, 0)
+    colorBar.Position         = UDim2.new(0, 0, 0.2, 0)
+    colorBar.BackgroundColor3 = theme.accent
+    colorBar.BorderSizePixel  = 0
+    colorBar.ZIndex           = 203
+    Instance.new("UICorner", colorBar).CornerRadius = UDim.new(1, 0)
+
+    item.MouseEnter:Connect(function()
+        TweenService:Create(item, TweenInfo.new(0.1), {BackgroundColor3 = theme.accent, BackgroundTransparency = 0.75}):Play()
+    end)
+    item.MouseLeave:Connect(function()
+        TweenService:Create(item, TweenInfo.new(0.1), {BackgroundColor3 = CONFIG.BG_PANEL, BackgroundTransparency = 0.3}):Play()
+    end)
+
+    local capturedIdx = i
+    local capturedTheme = theme
+    item.MouseButton1Click:Connect(function()
+        currentThemeIndex = capturedIdx
+        themeDdBtn.Text   = themeIcons[capturedIdx] .. "  " .. capturedTheme.name
+        applyTheme(capturedTheme)
+        closethemeDd()
+        -- Update menu stroke on next open
+        themeDdMenuStroke.Color  = capturedTheme.accent
+        themeDdStroke.Color      = capturedTheme.accent
+        themeStroke.Color        = capturedTheme.border
+    end)
+end
+
+themeDdBtn.MouseButton1Click:Connect(function()
+    themeDdOpen = not themeDdOpen
+    if themeDdOpen then
+        local absPos  = themeDdBtn.AbsolutePosition
+        local absSize = themeDdBtn.AbsoluteSize
+        local menuW   = absSize.X + 20
+        local contentH = themeDdLayout.AbsoluteContentSize.Y + 8
+        local menuH    = math.min(contentH, 170)
+        themeDdMenu.Position = UDim2.new(0, absPos.X, 0, absPos.Y + absSize.Y + 4)
+        themeDdMenu.Size     = UDim2.new(0, menuW, 0, 0)
+        themeDdMenu.Visible  = true
+        TweenService:Create(themeDdMenu, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            {Size = UDim2.new(0, menuW, 0, menuH)}):Play()
+        TweenService:Create(themeDdArrow, TweenInfo.new(0.15), {Rotation = 180}):Play()
+    else
+        closethemeDd()
+    end
+end)
+
+createSeparator(ConfigPage)
+
+-- ── Toggle: Transparency ─────────────────
+local transparencyContainer = Instance.new("Frame", ConfigPage)
+transparencyContainer.Size             = UDim2.new(1, 0, 0, 60)
+transparencyContainer.BackgroundColor3 = CONFIG.BG_PANEL
+transparencyContainer.BorderSizePixel  = 0
+transparencyContainer.ZIndex           = 3
+Instance.new("UICorner", transparencyContainer).CornerRadius = UDim.new(0, 10)
+local transpStroke = Instance.new("UIStroke", transparencyContainer)
+transpStroke.Color     = CONFIG.BORDER_COLOR
+transpStroke.Thickness = 1
+
+local transpLabel = Instance.new("TextLabel", transparencyContainer)
+transpLabel.Text                  = "Transparency"
+transpLabel.Size                  = UDim2.new(1, -80, 0, 22)
+transpLabel.Position              = UDim2.new(0, 14, 0, 10)
+transpLabel.BackgroundTransparency = 1
+transpLabel.TextColor3            = CONFIG.TEXT_PRIMARY
+transpLabel.TextSize              = 13
+transpLabel.Font                  = Enum.Font.GothamSemibold
+transpLabel.TextXAlignment        = Enum.TextXAlignment.Left
+transpLabel.ZIndex                = 4
+
+local transpDesc = Instance.new("TextLabel", transparencyContainer)
+transpDesc.Text                  = "Makes background and tab bar 50% transparent"
+transpDesc.Size                  = UDim2.new(1, -80, 0, 16)
+transpDesc.Position              = UDim2.new(0, 14, 0, 33)
+transpDesc.BackgroundTransparency = 1
+transpDesc.TextColor3            = CONFIG.TEXT_SECONDARY
+transpDesc.TextSize              = 10
+transpDesc.Font                  = Enum.Font.Gotham
+transpDesc.TextXAlignment        = Enum.TextXAlignment.Left
+transpDesc.ZIndex                = 4
+
+local transpTrack = Instance.new("Frame", transparencyContainer)
+transpTrack.Size             = UDim2.new(0, 48, 0, 26)
+transpTrack.Position         = UDim2.new(1, -62, 0.5, -13)
+transpTrack.BackgroundColor3 = CONFIG.TOGGLE_OFF
+transpTrack.BorderSizePixel  = 0
+transpTrack.ZIndex           = 4
+Instance.new("UICorner", transpTrack).CornerRadius = UDim.new(1, 0)
+
+local transpThumb = Instance.new("Frame", transpTrack)
+transpThumb.Size             = UDim2.new(0, 20, 0, 20)
+transpThumb.Position         = UDim2.new(0, 3, 0.5, -10)
+transpThumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+transpThumb.BorderSizePixel  = 0
+transpThumb.ZIndex           = 5
+Instance.new("UICorner", transpThumb).CornerRadius = UDim.new(1, 0)
+
+local transpState = false
+local transpBusy  = false
+
+local transpHitbox = Instance.new("TextButton", transparencyContainer)
+transpHitbox.Size                  = UDim2.new(1, 0, 1, 0)
+transpHitbox.BackgroundTransparency = 1
+transpHitbox.Text                  = ""
+transpHitbox.ZIndex                = 6
+
+transpHitbox.MouseButton1Click:Connect(function()
+    if transpBusy then return end
+    transpBusy  = true
+    transpState = not transpState
+
+    if transpState then
+        -- Turn on: toggle ON
+        TweenService:Create(transpTrack, TweenInfo.new(0.25), {BackgroundColor3 = CONFIG.TOGGLE_ON}):Play()
+        TweenService:Create(transpThumb, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            {Position = UDim2.new(0, 25, 0.5, -10)}):Play()
+        -- Apply transparency
+        TweenService:Create(MainFrame, TweenInfo.new(0.35), {BackgroundTransparency = 0.5}):Play()
+        TweenService:Create(TabBar,    TweenInfo.new(0.35), {BackgroundTransparency = 0.5}):Play()
+        TweenService:Create(TitleBar,  TweenInfo.new(0.35), {BackgroundTransparency = 0.5}):Play()
+        TweenService:Create(titleFix,  TweenInfo.new(0.35), {BackgroundTransparency = 0.5}):Play()
+    else
+        -- Turn off: toggle OFF
+        TweenService:Create(transpTrack, TweenInfo.new(0.25), {BackgroundColor3 = CONFIG.TOGGLE_OFF}):Play()
+        TweenService:Create(transpThumb, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            {Position = UDim2.new(0, 3, 0.5, -10)}):Play()
+        -- Remove transparency
+        TweenService:Create(MainFrame, TweenInfo.new(0.35), {BackgroundTransparency = 0}):Play()
+        TweenService:Create(TabBar,    TweenInfo.new(0.35), {BackgroundTransparency = 0}):Play()
+        TweenService:Create(TitleBar,  TweenInfo.new(0.35), {BackgroundTransparency = 0}):Play()
+        TweenService:Create(titleFix,  TweenInfo.new(0.35), {BackgroundTransparency = 0}):Play()
+    end
+
+    task.delay(0.3, function() transpBusy = false end)
+end)
+
+transpHitbox.MouseEnter:Connect(function()
+    TweenService:Create(transparencyContainer, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(26,26,46)}):Play()
+    TweenService:Create(transpStroke, TweenInfo.new(0.15), {Color = CONFIG.ACCENT_COLOR}):Play()
+end)
+transpHitbox.MouseLeave:Connect(function()
+    TweenService:Create(transparencyContainer, TweenInfo.new(0.15), {BackgroundColor3 = CONFIG.BG_PANEL}):Play()
+    TweenService:Create(transpStroke, TweenInfo.new(0.15), {Color = CONFIG.BORDER_COLOR}):Play()
+end)
+
+createSeparator(ConfigPage)
+
+-- Info de versão
+local versionInfo = Instance.new("TextLabel", ConfigPage)
+versionInfo.Text                  = "NEXUS HUB  v2.0  ·  Professional  ·  by NexusDev"
+versionInfo.Size                  = UDim2.new(1, 0, 0, 18)
+versionInfo.BackgroundTransparency = 1
+versionInfo.TextColor3            = CONFIG.TEXT_SECONDARY
+versionInfo.TextSize              = 9
+versionInfo.Font                  = Enum.Font.Gotham
+versionInfo.TextXAlignment        = Enum.TextXAlignment.Center
+versionInfo.ZIndex                = 3
+
+-- ══════════════════════════════════════════
+--         INITIALIZATION
 -- ══════════════════════════════════════════
 selectTab("Combat")
 
@@ -2329,4 +3548,4 @@ TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.Ea
     Size = UDim2.new(0, 440, 0, 320)
 }):Play()
 
-print("[NexusHub] ✓ Carregado com sucesso!")
+print("[NexusHub] ✓ Loaded successfully!")
