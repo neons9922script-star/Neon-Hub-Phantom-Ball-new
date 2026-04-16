@@ -306,7 +306,7 @@ task.spawn(function()
     if gameMode == "phantom" then
         -- ── Phantom Ball: show "not supported yet" popup ──────────────
         -- Hides loading card and shows a warning modal instead
-        loadCard.Visible = false
+        loadCard.Visible = true
 
         -- Overlay card (wider to fit message)
         local warnCard = Instance.new("Frame", loadFrame)
